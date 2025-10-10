@@ -1,0 +1,29 @@
+name: Daily Trading Signal
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # Runs at 11:00 AM UTC daily
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  send-signal:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install yfinance pandas numpy
+    
+    - name: Run trading signal
+      env:
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      run: python signal.py
