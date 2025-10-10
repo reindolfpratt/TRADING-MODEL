@@ -1,0 +1,706 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Tuple, Any
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⭐ STOCK SYMBOL CONFIGURATION - CHANGE YOUR STOCK HERE! ⭐
+# ═══════════════════════════════════════════════════════════════════════════════
+
+STOCK_SYMBOL = "GME"              # ← Change this to any stock (AAPL, TSLA, MSFT, etc.)
+START_DATE = "2025-03-01"         # ← First day to analyze (past data for testing)
+END_DATE = "2025-10-10"           # ← Last day to analyze (use TODAY'S DATE for live signals)
+INITIAL_MONEY = 10000             # ← How much money you start with ($)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class EnhancedTradingStrategy:
+    """
+    This is a trading robot that buys and sells stocks automatically.
+    
+    WHAT IT DOES (in simple terms):
+    - Downloads stock price history from Yahoo Finance
+    - Calculates when prices are going up or down using trend lines (moving averages)
+    - Decides when to buy (when trend goes up) and sell (when trend goes down)
+    - Tracks how much money you make or lose on each trade
+    - Shows you detailed results with profit/loss reports
+    - **NEW**: Tells you what to do RIGHT NOW with the stock (buy/sell/wait)
+    """
+    
+    def __init__(self, symbol: str, start_date: str, end_date: str, short_window: int = 20, 
+                 long_window: int = 50, initial_capital: float = 10000, 
+                 risk_per_trade: float = 0.02, stop_loss_pct: float = 0.05) -> None:
+        """
+        Set up the trading robot with your preferences.
+        
+        PARAMETERS (what each setting means):
+        - symbol: The stock ticker (e.g., "AAPL" for Apple, "TSLA" for Tesla)
+        - start_date: When to start analyzing (format: "YYYY-MM-DD")
+        - end_date: When to stop analyzing (format: "YYYY-MM-DD")
+        - short_window: Fast trend line (20 days = looks at last 20 days of prices)
+        - long_window: Slow trend line (50 days = looks at last 50 days of prices)
+        - initial_capital: Starting money in dollars
+        - risk_per_trade: How much to risk per trade (0.02 = 2% of your money)
+        - stop_loss_pct: Maximum loss before selling (0.05 = 5% loss limit)
+        """
+        self.symbol: str = symbol
+        self.start_date: str = start_date
+        self.end_date: str = end_date
+        self.short_window: int = short_window
+        self.long_window: int = long_window
+        self.initial_capital: float = initial_capital
+        self.risk_per_trade: float = risk_per_trade
+        self.stop_loss_pct: float = stop_loss_pct
+        self.data: Optional[pd.DataFrame] = None  # Will store all the stock price data
+        
+    def fetch_data(self) -> bool:
+        """
+        Step 1: Download stock price history from the internet.
+        
+        WHAT THIS DOES:
+        - Connects to Yahoo Finance website
+        - Downloads daily stock prices (open, high, low, close, volume)
+        - Saves the data so we can analyze it
+        - Returns True if successful, False if something went wrong
+        """
+        try:
+            print(f"📥 Downloading price data for {self.symbol}...")
+            
+            # Download the stock data from Yahoo Finance
+            self.data = yf.download(
+                self.symbol,                    # Which stock to download
+                start=self.start_date,          # Starting date
+                end=self.end_date,              # Ending date
+                progress=False,                 # Don't show download progress bar
+                multi_level_index=False         # Keep column names simple
+            )
+            
+            # Check if we actually got any data back
+            if self.data.empty:
+                raise ValueError(f"No data found for {self.symbol}")
+            
+            # Fix any weird column name issues (technical stuff, don't worry about it)
+            if isinstance(self.data.columns, pd.MultiIndex):
+                self.data.columns = self.data.columns.get_level_values(0)
+            
+            print(f"✅ Successfully downloaded {len(self.data)} days of data!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error downloading data: {e}")
+            return False
+    
+    def calculate_indicators(self) -> None:
+        """
+        Step 2: Calculate helpful numbers that tell us about price trends.
+        
+        WHAT THIS CALCULATES (with simple explanations):
+        
+        1. MOVING AVERAGES (MA): Smooth trend lines showing average prices
+           - Short MA (20 days): Fast-moving line, reacts quickly to price changes
+           - Long MA (50 days): Slow-moving line, shows overall trend
+           - When short crosses ABOVE long = UPTREND (good time to buy)
+           - When short crosses BELOW long = DOWNTREND (time to sell)
+        
+        2. ATR (Average True Range): Measures how much the price jumps around each day
+           - Think of it as "How wild is this stock?"
+           - High ATR = Stock is jumpy/volatile (like a rollercoaster)
+           - Low ATR = Stock moves steadily (like a calm river)
+           - We use this to decide how much money to risk
+        
+        3. RSI (Relative Strength Index): Shows if stock is too expensive or too cheap
+           - Scale from 0 to 100
+           - Above 70 = OVERBOUGHT (might be too expensive, could drop soon)
+           - Below 30 = OVERSOLD (might be too cheap, could rise soon)
+           - Between 30-70 = NORMAL (healthy trading range)
+           - We use this to avoid buying at bad times
+        
+        4. VOLUME: How many shares are being traded
+           - High volume = Many people buying/selling (strong signal)
+           - Low volume = Not much activity (weak signal, might be false)
+           - Volume Moving Average = Average trading activity over 20 days
+        """
+        if self.data is None:
+            return
+        
+        print("🧮 Calculating trend indicators...")
+        
+        # MOVING AVERAGES: Calculate the two trend lines
+        # These smooth out daily price jumps to show the overall direction
+        self.data['Short_MA'] = self.data['Close'].rolling(window=self.short_window).mean()
+        self.data['Long_MA'] = self.data['Close'].rolling(window=self.long_window).mean()
+        
+        # ATR (Average True Range): Measures how volatile/jumpy the stock is
+        # We need this to know how much money to risk on each trade
+        self.data['High-Low'] = self.data['High'] - self.data['Low']
+        self.data['High-Close'] = np.abs(self.data['High'] - self.data['Close'].shift())
+        self.data['Low-Close'] = np.abs(self.data['Low'] - self.data['Close'].shift())
+        self.data['ATR'] = self.data[['High-Low', 'High-Close', 'Low-Close']].max(axis=1).rolling(window=14).mean()
+        
+        # RSI (Relative Strength Index): Shows if stock is overbought or oversold
+        delta = self.data['Close'].diff()  # Day-to-day price changes
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()  # Average gains
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()  # Average losses
+        rs = gain / loss
+        self.data['RSI'] = 100 - (100 / (1 + rs))  # Final RSI value (0-100 scale)
+        
+        # VOLUME MOVING AVERAGE: Average trading activity
+        self.data['Volume_MA'] = self.data['Volume'].rolling(window=20).mean()
+        
+        print("✅ All indicators calculated!")
+        
+    def generate_signals(self) -> None:
+        """
+        Step 3: Decide when to BUY and when to SELL.
+        
+        HOW THE STRATEGY DECIDES (simple rules):
+        
+        🟢 BUY SIGNAL happens when ALL these conditions are TRUE:
+           1. Short trend line crosses ABOVE long trend line (upward momentum)
+           2. RSI is between 40-70 (not overbought, has room to go up)
+           3. Trading volume is at least 80% of normal (enough people trading)
+        
+        🔴 SELL SIGNAL happens when:
+           1. Short trend line crosses BELOW long trend line (downward momentum)
+           2. RSI confirms the trend (either below 60 or above 70)
+        
+        ⚪ NO SIGNAL (WAIT):
+           - If conditions aren't met, do nothing and wait
+        
+        Think of it like traffic lights:
+        - 🟢 Green (BUY) = All conditions look good, safe to buy
+        - 🔴 Red (SELL) = Trend is turning down, time to sell
+        - ⚪ Yellow/No signal = Wait and be patient
+        """
+        if self.data is None:
+            return
+        
+        print("🚦 Generating buy/sell signals...")
+        
+        # Start with no signal (0 = do nothing)
+        self.data['Signal'] = 0
+        
+        # PRIMARY RULE: Check if trend lines cross each other
+        bullish_cross = (self.data['Short_MA'] > self.data['Long_MA'])  # Fast line above slow line = uptrend
+        bearish_cross = (self.data['Short_MA'] < self.data['Long_MA'])  # Fast line below slow line = downtrend
+        
+        # SAFETY FILTERS: Don't buy unless these conditions are also true
+        rsi_bullish = (self.data['RSI'] > 40) & (self.data['RSI'] < 70)  # RSI in healthy range
+        rsi_bearish = (self.data['RSI'] < 60) | (self.data['RSI'] > 70)  # RSI confirms sell
+        
+        # VOLUME CHECK: Make sure enough people are trading (avoid fake signals)
+        volume_confirmed = (self.data['Volume'].values > (self.data['Volume_MA'].values * 0.8))
+        
+        # APPLY THE RULES: Mark buy and sell signals
+        self.data.loc[bullish_cross & rsi_bullish & volume_confirmed, 'Signal'] = 1   # 1 = BUY
+        self.data.loc[bearish_cross & rsi_bearish, 'Signal'] = -1                      # -1 = SELL
+        
+        print("✅ Buy/sell signals generated!")
+        
+    def execute_backtest(self) -> Tuple[List[Dict[str, Any]], float]:
+        """
+        Step 4: Simulate trading to see how much money we would make/lose.
+        
+        WHAT THIS DOES (step by step):
+        - Finds all the BUY signals in the historical data
+        - Finds all the SELL signals in the historical data
+        - Matches each BUY with the next SELL (one complete trade)
+        - Calculates profit/loss for each trade
+        - Keeps track of how much money you have after each trade
+        
+        HOW POSITION SIZING WORKS (how many shares to buy):
+        - We don't bet all our money on one trade (that's way too risky!)
+        - We calculate shares to buy based on:
+          * How much money we currently have
+          * How volatile the stock is (using ATR)
+          * Our risk limit (only risk 2% per trade)
+        - More volatile/jumpy stocks = buy fewer shares (safer)
+        - Less volatile stocks = can buy more shares
+        """
+        if self.data is None:
+            return [], self.initial_capital
+        
+        print("💰 Running backtest (simulating past trades)...")
+        
+        # Find all the days where signals changed
+        buy_signals = self.data[self.data['Signal'].diff() == 1]   # Where signal changed to BUY
+        sell_signals = self.data[self.data['Signal'].diff() == -1]  # Where signal changed to SELL
+        
+        trades: List[Dict[str, Any]] = []  # Will store all our trades here
+        capital = self.initial_capital     # Track how much money we have
+        
+        buy_idx = 0   # Index to track which buy signal we're looking at
+        sell_idx = 0  # Index to track which sell signal we're looking at
+        
+        # Match each BUY with the next SELL
+        while buy_idx < len(buy_signals) and sell_idx < len(sell_signals):
+            buy_date = buy_signals.index[buy_idx]
+            
+            # Find the next sell signal that happens AFTER this buy
+            valid_sells = sell_signals[sell_signals.index > buy_date]
+            if len(valid_sells) == 0:
+                break  # No more sells found, stop
+                
+            sell_date = valid_sells.index[0]
+            sell_idx = sell_signals.index.get_loc(sell_date)
+            
+            # Get the actual prices on buy and sell days
+            buy_price = float(buy_signals.loc[buy_date, 'Close'])
+            sell_price = float(sell_signals.loc[sell_date, 'Close'])
+            atr = float(buy_signals.loc[buy_date, 'ATR'])  # Volatility measure
+            
+            # CALCULATE HOW MANY SHARES TO BUY:
+            # Risk only 2% of capital, adjusted for how jumpy the stock is
+            risk_amount = capital * self.risk_per_trade  # 2% of our money
+            position_size = int((risk_amount / (atr * 2)) if atr > 0 else 100)
+            position_size = max(1, min(position_size, int(capital / buy_price)))  # Don't buy more than we can afford
+            
+            # CALCULATE PROFIT/LOSS:
+            profit_loss = (sell_price - buy_price) * position_size  # Dollar profit/loss
+            profit_pct = ((sell_price - buy_price) / buy_price) * 100  # Percentage profit/loss
+            capital += profit_loss  # Update our total money
+            
+            # How many days did we hold the stock?
+            hold_days = (sell_date - buy_date).days
+            
+            # Save all the trade details
+            trades.append({
+                'buy_date': buy_date.date(),
+                'buy_price': round(buy_price, 2),
+                'sell_date': sell_date.date(),
+                'sell_price': round(sell_price, 2),
+                'position_size': position_size,
+                'profit_loss': round(profit_loss, 2),
+                'profit_pct': round(profit_pct, 2),
+                'hold_days': hold_days,
+                'capital': round(capital, 2)
+            })
+            
+            buy_idx += 1
+            sell_idx += 1
+        
+        print(f"✅ Backtest complete! Found {len(trades)} historical trades.")
+        return trades, capital
+    
+    def calculate_metrics(self, trades: List[Dict[str, Any]], final_capital: float) -> Optional[Dict[str, float]]:
+        """
+        Step 5: Calculate statistics about how well the strategy performed.
+        
+        METRICS EXPLAINED (in the simplest possible terms):
+        
+        1. WIN RATE: What percentage of trades made money?
+           - Example: 60% win rate = 6 out of 10 trades were profitable
+           - Higher is better!
+           - Good strategies: 50-70%
+           - Your goal: Above 50%
+        
+        2. AVERAGE WIN: How much money do you make on winning trades?
+           - Example: $250 average win = each winning trade makes $250
+           - Higher is better!
+        
+        3. AVERAGE LOSS: How much money do you lose on losing trades?
+           - Example: $150 average loss = each losing trade loses $150
+           - Lower is better (you want small losses)
+        
+        4. PROFIT FACTOR: Ratio of total wins to total losses
+           - Formula: (All winning money) ÷ (All losing money)
+           - Above 1.0 = Making more than losing (GOOD!)
+           - Below 1.0 = Losing more than making (BAD!)
+           - Example: 2.0 = For every $1 you lose, you make $2
+           - Good strategies: Above 1.5
+        
+        5. TOTAL RETURN: How much money did you make/lose overall?
+           - Example: +$500 = You made $500 profit
+           - Example: -$200 = You lost $200
+           - Positive is good, negative is bad!
+        
+        6. SHARPE RATIO: Risk-adjusted returns (fancy way to measure quality)
+           - Measures: "Is the profit worth the risk/stress?"
+           - Above 1.0 = Excellent (good returns for the risk)
+           - 0 to 1.0 = Okay
+           - Below 0 = Bad (losing money or too risky)
+           - Think of it as "quality score" for your strategy
+        
+        7. MAX DRAWDOWN: Biggest drop in account value from the peak
+           - Example: -20% = At worst, you lost 20% from your highest point
+           - This shows your "worst day ever"
+           - Lower is better (less pain!)
+           - Good strategies: Under -20%
+           - Example: Account hit $12,000, then dropped to $10,000 = -16.7% drawdown
+        
+        8. AVERAGE HOLD PERIOD: How many days you hold each trade
+           - Example: 5 days = You buy and sell within a week
+           - Shorter = Day trader / Quick in and out
+           - Longer = Swing trader / Patient investor
+        """
+        if not trades:
+            return None
+        
+        print("📊 Calculating performance statistics...")
+        
+        df_trades = pd.DataFrame(trades)  # Convert trades list to a table
+        
+        # Separate winning and losing trades
+        winning_trades = df_trades[df_trades['profit_loss'] > 0]
+        losing_trades = df_trades[df_trades['profit_loss'] < 0]
+        
+        # Calculate win rate percentage
+        win_rate = (len(winning_trades) / len(df_trades)) * 100 if len(df_trades) > 0 else 0
+        
+        # Calculate average win and loss amounts
+        avg_win = float(winning_trades['profit_loss'].mean()) if len(winning_trades) > 0 else 0
+        avg_loss = float(abs(losing_trades['profit_loss'].mean())) if len(losing_trades) > 0 else 0
+        
+        # Profit factor: How many dollars we make per dollar we lose
+        profit_factor = avg_win / avg_loss if avg_loss > 0 else 0
+        
+        # Total profit/loss calculations
+        total_return = final_capital - self.initial_capital
+        total_return_pct = ((final_capital - self.initial_capital) / self.initial_capital) * 100
+        
+        # Sharpe ratio (risk-adjusted return measure)
+        returns = df_trades['profit_pct'].values
+        sharpe = float((returns.mean() / returns.std())) if returns.std() > 0 else 0
+        
+        # Maximum drawdown (biggest account drop)
+        capital_curve = df_trades['capital'].values
+        running_max = np.maximum.accumulate(capital_curve)
+        drawdown = (capital_curve - running_max) / running_max * 100
+        max_drawdown = float(drawdown.min())
+        
+        return {
+            'total_trades': len(df_trades),
+            'winning_trades': len(winning_trades),
+            'losing_trades': len(losing_trades),
+            'win_rate': round(win_rate, 2),
+            'avg_win': round(avg_win, 2),
+            'avg_loss': round(avg_loss, 2),
+            'profit_factor': round(profit_factor, 2),
+            'total_return': round(total_return, 2),
+            'total_return_pct': round(total_return_pct, 2),
+            'sharpe_ratio': round(sharpe, 2),
+            'max_drawdown': round(max_drawdown, 2),
+            'avg_hold_days': round(float(df_trades['hold_days'].mean()), 1)
+        }
+    
+    def display_results(self, trades: List[Dict[str, Any]], metrics: Optional[Dict[str, float]]) -> None:
+        """
+        Step 6: Display all the historical results in an easy-to-read format.
+        
+        WHAT YOU'LL SEE:
+        1. Header with stock symbol and date range
+        2. List of all past trades (buy date, sell date, profit/loss)
+        3. Summary statistics with detailed explanations
+        """
+        print(f"\n{'='*70}")
+        print(f"📊 TRADING STRATEGY BACKTEST RESULTS: {self.symbol}")
+        print(f"{'='*70}")
+        print(f"Period: {self.start_date} to {self.end_date}")
+        print(f"Strategy: {self.short_window}/{self.long_window} MA Crossover with RSI & Volume filters")
+        print(f"Initial Capital: ${self.initial_capital:,.2f}\n")
+        
+        if not trades:
+            print("❌ No valid trades generated in this period.\n")
+            return
+        
+        print(f"{'─'*70}")
+        print("TRADE HISTORY (Past Trades)")
+        print(f"{'─'*70}\n")
+        
+        # Show each trade with details
+        for i, trade in enumerate(trades, 1):
+            emoji = "🟢" if trade['profit_loss'] > 0 else "🔴"  # Green for profit, red for loss
+            print(f"Trade #{i} {emoji}")
+            print(f"  📅 Entry:  {trade['buy_date']} @ ${trade['buy_price']} ({trade['position_size']} shares)")
+            print(f"  📅 Exit:   {trade['sell_date']} @ ${trade['sell_price']}")
+            print(f"  💰 P&L:    ${trade['profit_loss']} ({trade['profit_pct']:+.2f}%)")
+            print(f"  ⏱️  Hold:   {trade['hold_days']} days | Capital: ${trade['capital']:,.2f}\n")
+        
+        if metrics is None:
+            return
+        
+        # Show summary statistics with detailed explanations
+        print(f"{'='*70}")
+        print("PERFORMANCE METRICS (How Well Did The Strategy Do?)")
+        print(f"{'='*70}\n")
+        
+        print(f"📈 Total Return:        ${metrics['total_return']:+,.2f} ({metrics['total_return_pct']:+.2f}%)")
+        print(f"   Explanation: Overall profit/loss. Positive = Made money, Negative = Lost money\n")
+        
+        print(f"🎯 Win Rate:            {metrics['win_rate']}% ({metrics['winning_trades']}W / {metrics['losing_trades']}L)")
+        print(f"   Explanation: Percentage of profitable trades. Above 50% is good\n")
+        
+        print(f"💵 Average Win:         ${metrics['avg_win']}")
+        print(f"   Explanation: Average profit per winning trade. Higher is better\n")
+        
+        print(f"💸 Average Loss:        ${metrics['avg_loss']}")
+        print(f"   Explanation: Average loss per losing trade. Lower is better\n")
+        
+        print(f"⚖️  Profit Factor:       {metrics['profit_factor']}")
+        print(f"   Explanation: $ made per $ lost. Above 1.5 is good, above 2.0 is excellent\n")
+        
+        print(f"📊 Sharpe Ratio:        {metrics['sharpe_ratio']}")
+        print(f"   Explanation: Quality score. Above 1.0 = excellent, Below 0 = bad\n")
+        
+        print(f"📉 Max Drawdown:        {metrics['max_drawdown']}%")
+        print(f"   Explanation: Worst account drop from peak. Under -20% is acceptable\n")
+        
+        print(f"⏳ Avg Hold Period:     {metrics['avg_hold_days']} days")
+        print(f"   Explanation: How long you hold stocks on average\n")
+        
+        print(f"{'='*70}\n")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 🔮 NEW FEATURE: CURRENT PREDICTION
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def get_current_signal(self) -> None:
+        """
+        NEW FEATURE: Shows what the strategy says to do RIGHT NOW!
+        
+        This looks at the LATEST data point and tells you:
+        - Should I BUY the stock today?
+        - Should I SELL the stock today?
+        - Should I WAIT and do nothing?
+        
+        It shows the current values of all indicators so you can make an informed decision.
+        """
+        if self.data is None or len(self.data) == 0:
+            print("❌ No data available for current signal")
+            return
+        
+        # Get the most recent (last) day's data
+        latest = self.data.iloc[-1]
+        latest_date = self.data.index[-1].date()
+        
+        # Get current signal value
+        current_signal = latest['Signal']
+        
+        # Get all current indicator values
+        current_price = float(latest['Close'])
+        short_ma = float(latest['Short_MA'])
+        long_ma = float(latest['Long_MA'])
+        rsi = float(latest['RSI'])
+        volume = float(latest['Volume'])
+        volume_ma = float(latest['Volume_MA'])
+        atr = float(latest['ATR'])
+        
+        # Determine what action to take
+        if current_signal == 1:
+            action = "🟢 BUY"
+            action_text = "The strategy suggests BUYING this stock"
+            reason = "Short-term trend crossed above long-term trend (bullish)"
+        elif current_signal == -1:
+            action = "🔴 SELL"
+            action_text = "The strategy suggests SELLING or staying OUT"
+            reason = "Short-term trend crossed below long-term trend (bearish)"
+        else:
+            action = "⚪ WAIT"
+            action_text = "The strategy suggests WAITING (no clear signal)"
+            reason = "Conditions not met for buy or sell"
+        
+        # Display the current prediction
+        print(f"\n{'═'*70}")
+        print(f"🔮 CURRENT SIGNAL FOR {self.symbol} (WHAT TO DO NOW)")
+        print(f"{'═'*70}")
+        print(f"📅 As of: {latest_date}\n")
+        
+        print(f"{'─'*70}")
+        print(f"RECOMMENDATION: {action}")
+        print(f"{'─'*70}")
+        print(f"{action_text}")
+        print(f"Reason: {reason}\n")
+        
+        print(f"{'─'*70}")
+        print("CURRENT MARKET DATA")
+        print(f"{'─'*70}")
+        print(f"💵 Current Price:         ${current_price:.2f}")
+        print(f"   (The stock's closing price today)\n")
+        
+        print(f"📊 Short MA (20-day):     ${short_ma:.2f}")
+        print(f"   (Fast trend line - recent average price)\n")
+        
+        print(f"📊 Long MA (50-day):      ${long_ma:.2f}")
+        print(f"   (Slow trend line - overall trend)\n")
+        
+        # Trend analysis
+        if short_ma > long_ma:
+            trend = "UPTREND (bullish) - Short MA is above Long MA"
+        else:
+            trend = "DOWNTREND (bearish) - Short MA is below Long MA"
+        print(f"📈 Trend:                 {trend}\n")
+        
+        # RSI analysis
+        print(f"🎯 RSI:                   {rsi:.2f}")
+        if rsi > 70:
+            rsi_status = "OVERBOUGHT (might be too expensive)"
+        elif rsi < 30:
+            rsi_status = "OVERSOLD (might be too cheap)"
+        else:
+            rsi_status = "NORMAL (healthy range)"
+        print(f"   Status: {rsi_status}\n")
+        
+        # Volume analysis
+        volume_ratio = (volume / volume_ma) * 100
+        print(f"📦 Volume:                {volume:,.0f} shares")
+        print(f"   (Today's trading activity)")
+        print(f"📦 Volume MA:             {volume_ma:,.0f} shares")
+        print(f"   (Average activity)")
+        print(f"   Today's volume is {volume_ratio:.0f}% of normal")
+        if volume > volume_ma:
+            print(f"   ✅ High volume confirms the signal\n")
+        else:
+            print(f"   ⚠️  Low volume - signal might be weak\n")
+        
+        # Volatility
+        print(f"🎢 ATR (Volatility):      ${atr:.2f}")
+        if atr > 2:
+            volatility = "HIGH - Stock is very jumpy"
+        elif atr > 1:
+            volatility = "MODERATE - Normal price swings"
+        else:
+            volatility = "LOW - Stock moves steadily"
+        print(f"   {volatility}\n")
+        
+        print(f"{'═'*70}")
+        print("⚠️  IMPORTANT DISCLAIMER FROM REINDOLF COHBY")
+        print(f"{'═'*70}")
+        print("This is NOT financial advice! This is just what a simple automated")
+        print("strategy thinks. Always do your own research and never invest more")
+        print("than you can afford to lose. Past performance does NOT guarantee")
+        print("future results. Consider consulting a financial advisor.")
+        print(f"{'═'*70}\n")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 📊 VISUALIZATION SECTION - OPTIONAL CHARTS
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def plot_strategy(self) -> None:
+        """
+        OPTIONAL: Create charts showing the trading strategy visually.
+        
+        CREATES 3 CHARTS:
+        1. TOP: Stock price with trend lines and buy/sell markers
+        2. MIDDLE: RSI indicator (overbought/oversold)
+        3. BOTTOM: Trading volume
+        """
+        if self.data is None:
+            return
+        
+        print("📊 Creating visualization charts...")
+        
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+        
+        # Chart 1: Price and Moving Averages
+        ax1.plot(self.data.index, self.data['Close'], label='Close Price', linewidth=1.5, alpha=0.7)
+        ax1.plot(self.data.index, self.data['Short_MA'], label=f'{self.short_window}-day MA', linewidth=1.2)
+        ax1.plot(self.data.index, self.data['Long_MA'], label=f'{self.long_window}-day MA', linewidth=1.2)
+        
+        buy_signals = self.data[self.data['Signal'].diff() == 1]
+        sell_signals = self.data[self.data['Signal'].diff() == -1]
+        ax1.scatter(buy_signals.index, buy_signals['Close'], color='green', marker='^', s=100, label='Buy', zorder=5)
+        ax1.scatter(sell_signals.index, sell_signals['Close'], color='red', marker='v', s=100, label='Sell', zorder=5)
+        
+        ax1.set_ylabel('Price ($)', fontsize=10)
+        ax1.set_title(f'{self.symbol} - Enhanced Trading Strategy', fontsize=12, fontweight='bold')
+        ax1.legend(loc='best')
+        ax1.grid(alpha=0.3)
+        
+        # Chart 2: RSI
+        ax2.plot(self.data.index, self.data['RSI'], color='purple', linewidth=1)
+        ax2.axhline(y=70, color='r', linestyle='--', alpha=0.5)
+        ax2.axhline(y=30, color='g', linestyle='--', alpha=0.5)
+        ax2.fill_between(self.data.index, 30, 70, alpha=0.1)
+        ax2.set_ylabel('RSI', fontsize=10)
+        ax2.set_ylim(0, 100)
+        ax2.grid(alpha=0.3)
+        
+        # Chart 3: Volume
+        colors = ['green' if self.data['Close'].iloc[i] >= self.data['Open'].iloc[i] 
+                 else 'red' for i in range(len(self.data))]
+        ax3.bar(self.data.index, self.data['Volume'], color=colors, alpha=0.5, width=0.8)
+        ax3.plot(self.data.index, self.data['Volume_MA'], color='blue', linewidth=1, label='Volume MA')
+        ax3.set_ylabel('Volume', fontsize=10)
+        ax3.set_xlabel('Date', fontsize=10)
+        ax3.legend(loc='best')
+        ax3.grid(alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        print("✅ Charts displayed!")
+    
+    def run(self) -> None:
+        """
+        MAIN FUNCTION: Runs the entire trading strategy.
+        
+        STEPS:
+        1. Download stock data
+        2. Calculate indicators
+        3. Generate signals
+        4. Run backtest (historical trades)
+        5. Calculate statistics
+        6. Display results
+        7. **NEW**: Show current prediction
+        8. Show charts (optional)
+        """
+        # Steps 1-3: Get data and analyze
+        if not self.fetch_data():
+            print("❌ Failed to download data. Cannot proceed.")
+            return
+        
+        self.calculate_indicators()
+        self.generate_signals()
+        
+        # Steps 4-6: Backtest and show results
+        trades, final_capital = self.execute_backtest()
+        metrics = self.calculate_metrics(trades, final_capital)
+        
+        if metrics:
+            self.display_results(trades, metrics)
+        else:
+            print(f"\n❌ No valid historical trades found for {self.symbol}.\n")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 🔮 STEP 7: SHOW CURRENT PREDICTION (WHAT TO DO NOW)
+        # ═══════════════════════════════════════════════════════════════════════
+        
+        self.get_current_signal()  # Shows what to do RIGHT NOW
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # 📊 STEP 8: VISUALIZATION (OPTIONAL)
+        # ═══════════════════════════════════════════════════════════════════════
+        # TO DISABLE CHARTS: Put a # in front of the line below
+        # TO ENABLE CHARTS: Remove the # from the line below
+        # ═══════════════════════════════════════════════════════════════════════
+        
+        self.plot_strategy()  # ← COMMENT THIS OUT (#) TO DISABLE CHARTS
+        
+        # ═══════════════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🚀 RUN THE STRATEGY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    # Create and run the trading strategy
+    strategy = EnhancedTradingStrategy(
+        symbol=STOCK_SYMBOL,          # Stock to analyze
+        start_date=START_DATE,        # Start date for historical data
+        end_date=END_DATE,            # End date (use today for live signals)
+        short_window=20,              # Fast trend line (20 days)
+        long_window=50,               # Slow trend line (50 days)
+        initial_capital=INITIAL_MONEY,  # Starting money
+        risk_per_trade=0.02,          # Risk 2% per trade
+        stop_loss_pct=0.05            # 5% stop loss
+    )
+    
+    # Run everything!
+    strategy.run()
