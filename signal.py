@@ -19,7 +19,7 @@ def get_signal_for_stock(symbol):
         data = yf.download(symbol, start=START_DATE, end=END_DATE, progress=False)
         
         if data.empty:
-            return symbol, "ERROR"
+            return symbol, "ERROR", 0.0
         
         # Calculate indicators
         data['Short_MA'] = data['Close'].rolling(window=10).mean()
@@ -33,33 +33,87 @@ def get_signal_for_stock(symbol):
         data['RSI'] = 100 - (100 / (1 + rs))
         
         latest = data.iloc[-1]
+        price = float(latest['Close'])
         short_ma = float(latest['Short_MA'])
         long_ma = float(latest['Long_MA'])
         rsi = float(latest['RSI'])
         
         # Determine signal
         if pd.isna(short_ma) or pd.isna(long_ma):
-            return symbol, "WAIT"
+            return symbol, "WAIT", price
         elif short_ma > long_ma and 50 < rsi < 65:
-            return symbol, "BUY"
+            return symbol, "BUY", price
         elif short_ma < long_ma:
-            return symbol, "SELL"
+            return symbol, "SELL", price
         else:
-            return symbol, "WAIT"
+            return symbol, "WAIT", price
         
     except Exception as e:
-        return symbol, "ERROR"
+        return symbol, "ERROR", 0.0
 
-def create_simple_email():
-    """Create simple email with just stock + action"""
+def create_beautiful_email():
+    """Create beautiful formatted email"""
     results = []
     
     for stock in STOCKS:
-        symbol, signal = get_signal_for_stock(stock)
-        results.append(f"{symbol} - {signal}")
+        symbol, signal, price = get_signal_for_stock(stock)
+        results.append({
+            'symbol': symbol,
+            'signal': signal,
+            'price': price
+        })
     
-    email_body = f"Daily Signals - {date.today()}\n\n"
-    email_body += "\n".join(results)
+    # Count signals
+    buy_count = sum(1 for r in results if r['signal'] == 'BUY')
+    sell_count = sum(1 for r in results if r['signal'] == 'SELL')
+    wait_count = sum(1 for r in results if r['signal'] == 'WAIT')
+    
+    # Create email
+    email_body = f"""
+╔══════════════════════════════════════════════════╗
+║          📊 DAILY TRADING SIGNALS 📊            ║
+║              {date.today()}                  ║
+╚══════════════════════════════════════════════════╝
+
+📈 Summary: {buy_count} BUY | {sell_count} SELL | {wait_count} WAIT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    # Add each stock
+    for r in results:
+        symbol = r['symbol']
+        signal = r['signal']
+        price = r['price']
+        
+        # Signal emoji
+        if signal == 'BUY':
+            emoji = '🟢'
+        elif signal == 'SELL':
+            emoji = '🔴'
+        elif signal == 'WAIT':
+            emoji = '⚪'
+        else:
+            emoji = '⚠️'
+        
+        # Format price
+        if price >= 1000:
+            price_str = f"${price:,.2f}"
+        else:
+            price_str = f"${price:.2f}"
+        
+        email_body += f"""
+{emoji} {symbol:<6} → {signal:<4}  |  Price: {price_str}
+"""
+    
+    email_body += """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Strategy: 10/30 MA Crossover + RSI (50-65)
+⚠️  Not financial advice. Trade responsibly!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
     
     return email_body
 
@@ -76,7 +130,7 @@ def send_email(message):
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = receiver_email
-    msg['Subject'] = f'Trading Signals - {date.today()}'
+    msg['Subject'] = f'📊 Trading Signals - {date.today()}'
     
     msg.attach(MIMEText(message, 'plain'))
     
@@ -91,6 +145,6 @@ def send_email(message):
         print(f"❌ Email failed: {str(e)}")
 
 if __name__ == "__main__":
-    email_message = create_simple_email()
+    email_message = create_beautiful_email()
     print(email_message)
     send_email(email_message)
