@@ -110,7 +110,8 @@ def create_beautiful_email():
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Strategy: 10/30 MA Crossover + RSI (50-65)
-⚠️  Not financial advice. Trade responsibly!
+
+⚠️ MESSAGE FROM REINDOLF: This is no financial advice. Trade responsibly!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
