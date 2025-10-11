@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import date
+from datetime import date, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -13,7 +13,7 @@ STOCKS = ["SPY", "AMZN", "MSFT", "NVDA", "TSLA", "GOOGL"]
 def get_signal_for_stock(symbol):
     """Get trading signal for a single stock"""
     END_DATE = str(date.today())
-    START_DATE = "2025-09-01"
+    START_DATE = str(date.today() - timedelta(days=60))
     
     try:
         data = yf.download(symbol, start=START_DATE, end=END_DATE, progress=False)
@@ -71,10 +71,7 @@ def create_beautiful_email():
     # Create email
     email_body = f"""
 
-          DAILY TRADING SIGNALS  
-          
-             {date.today()}                 
-
+DAILY TRADING SIGNALS: {date.today()}                 
 
  Summary: {buy_count} BUY | {sell_count} SELL | {wait_count} WAIT
 
