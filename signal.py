@@ -69,52 +69,102 @@ def create_beautiful_email():
     wait_count = sum(1 for r in results if r['signal'] == 'WAIT')
     
     # Create email
-    email_body = f"""
-
-          *DAILY TRADING SIGNALS*           
-             *{date.today()}*                 
-
-
- Summary: {buy_count} BUY | {sell_count} SELL | {wait_count} WAIT
-
-
+# Create email
+email_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+    <table width="600" cellpadding="0" cellspacing="0" style="margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd;">
+        
+        <!-- Header -->
+        <tr>
+            <td style="background-color: #2c3e50; color: #ffffff; text-align: center; padding: 30px;">
+                <h1 style="margin: 0; font-size: 24px;">DAILY TRADING SIGNALS</h1>
+                <p style="margin: 10px 0 0 0; font-size: 14px;">{date.today()}</p>
+            </td>
+        </tr>
+        
+        <!-- Summary -->
+        <tr>
+            <td style="padding: 20px; text-align: center; background-color: #ecf0f1;">
+                <p style="margin: 0; font-size: 16px;">
+                    <strong>{buy_count} BUY</strong> | <strong>{sell_count} SELL</strong> | <strong>{wait_count} WAIT</strong>
+                </p>
+            </td>
+        </tr>
+        
+        <!-- Stock Signals -->
+        <tr>
+            <td style="padding: 20px;">
+                <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
+                    <tr style="background-color: #34495e; color: #ffffff;">
+                        <th style="text-align: left; padding: 12px; border-bottom: 2px solid #2c3e50;">SYMBOL</th>
+                        <th style="text-align: center; padding: 12px; border-bottom: 2px solid #2c3e50;">SIGNAL</th>
+                        <th style="text-align: right; padding: 12px; border-bottom: 2px solid #2c3e50;">PRICE</th>
+                    </tr>
 """
+
+# Add each stock
+for r in results:
+    symbol = r['symbol']
+    signal = r['signal']
+    price = r['price']
     
-    # Add each stock
-    for r in results:
-        symbol = r['symbol']
-        signal = r['signal']
-        price = r['price']
-        
-        # Signal emoji
-        if signal == 'BUY':
-            emoji = '🟢'
-        elif signal == 'SELL':
-            emoji = '🔴'
-        elif signal == 'WAIT':
-            emoji = '⚪'
-        else:
-            emoji = '⚠️'
-        
-        # Format price
-        if price >= 1000:
-            price_str = f"${price:,.2f}"
-        else:
-            price_str = f"${price:.2f}"
-        
-        email_body += f"""
-{emoji} {symbol:<6} → {signal:<4}  |  Price: {price_str}
+    # Determine row color based on signal
+    if signal == 'BUY':
+        row_color = '#d5f4e6'  # Light green
+        signal_color = '#27ae60'  # Green
+    elif signal == 'SELL':
+        row_color = '#fadbd8'  # Light red
+        signal_color = '#e74c3c'  # Red
+    else:  # WAIT
+        row_color = '#f9f9f9'  # Light gray
+        signal_color = '#95a5a6'  # Gray
+    
+    # Format price
+    if price >= 1000:
+        price_str = f"${price:,.2f}"
+    else:
+        price_str = f"${price:.2f}"
+    
+    email_body += f"""
+                    <tr style="background-color: {row_color};">
+                        <td style="padding: 12px; border-bottom: 1px solid #ddd;"><strong>{symbol}</strong></td>
+                        <td style="text-align: center; padding: 12px; border-bottom: 1px solid #ddd; color: {signal_color};"><strong>{signal}</strong></td>
+                        <td style="text-align: right; padding: 12px; border-bottom: 1px solid #ddd;"><strong>{price_str}</strong></td>
+                    </tr>
 """
-    
-    email_body += """
 
-
-*Strategy:* 10/30 MA Crossover + RSI (50-65)
-
-⚠️*MESSAGE FROM REINDOLF:* 
-This is no financial advice. Trade responsibly!
-
-
+email_body += f"""
+                </table>
+            </td>
+        </tr>
+        
+        <!-- Strategy Info -->
+        <tr>
+            <td style="padding: 20px; background-color: #ecf0f1; text-align: center;">
+                <p style="margin: 0; font-size: 14px; color: #7f8c8d;">
+                    <strong>Strategy:</strong> 10/30 MA Crossover + RSI (50-65)
+                </p>
+            </td>
+        </tr>
+        
+        <!-- Footer -->
+        <tr>
+            <td style="padding: 20px; background-color: #2c3e50; color: #ffffff; text-align: center;">
+                <p style="margin: 0; font-size: 12px;">
+                    <strong>MESSAGE FROM REINDOLF:</strong><br>
+                    This is not financial advice. Trade responsibly!
+                </p>
+            </td>
+        </tr>
+        
+    </table>
+</body>
+</html>
 """
     
     return email_body
@@ -134,7 +184,7 @@ def send_email(message):
     msg['To'] = receiver_email
     msg['Subject'] = f' Trading Signals - {date.today()}'
     
-    msg.attach(MIMEText(message, 'plain'))
+    msg.attach(MIMEText(message, 'html'))
     
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
