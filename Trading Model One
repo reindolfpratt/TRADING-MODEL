@@ -22,7 +22,7 @@ INITIAL_MONEY = 10000             # ← How much money you start with ($)
 
 class EnhancedTradingStrategy:
     """
-    This is a trading robot that buys and sells stocks automatically.
+    This is a trading robot that tells yoy to buy and sell stocks.
     
     WHAT IT DOES (in simple terms):
     - Downloads stock price history from Yahoo Finance
