@@ -70,14 +70,14 @@ def create_beautiful_email():
     
     # Create email
     email_body = f"""
-╔══════════════════════════════════════════════════╗
-║          📊 DAILY TRADING SIGNALS 📊            ║
-║              {date.today()}                  ║
-╚══════════════════════════════════════════════════╝
 
-📈 Summary: {buy_count} BUY | {sell_count} SELL | {wait_count} WAIT
+          *DAILY TRADING SIGNALS*           
+             *{date.today()}*                 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Summary: {buy_count} BUY | {sell_count} SELL | {wait_count} WAIT
+
+
 """
     
     # Add each stock
@@ -107,13 +107,14 @@ def create_beautiful_email():
 """
     
     email_body += """
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Strategy: 10/30 MA Crossover + RSI (50-65)
 
-⚠️ MESSAGE FROM REINDOLF: This is no financial advice. Trade responsibly!
+*Strategy:* 10/30 MA Crossover + RSI (50-65)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️*MESSAGE FROM REINDOLF:* 
+This is no financial advice. Trade responsibly!
+
+
 """
     
     return email_body
@@ -131,7 +132,7 @@ def send_email(message):
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = receiver_email
-    msg['Subject'] = f'📊 Trading Signals - {date.today()}'
+    msg['Subject'] = f' Trading Signals - {date.today()}'
     
     msg.attach(MIMEText(message, 'plain'))
     
