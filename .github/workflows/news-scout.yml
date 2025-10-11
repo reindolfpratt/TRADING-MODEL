@@ -1,0 +1,29 @@
+name: News Scout Bot
+
+on:
+  schedule:
+    - cron: '*/10 13-20 * * 1-5'  # Every 10 min, 1:30PM-8PM UTC, Mon-Fri
+  workflow_dispatch:  # Manual trigger button
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install yfinance feedparser vaderSentiment requests
+    
+    - name: Run news scout
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: python news_scout_bot.py
