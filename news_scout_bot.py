@@ -110,44 +110,45 @@ def send_telegram_alert(symbol, action, price, impact, reasoning):
         target2 = round(price * 1.05, 2)
         stop = round(price * 0.985, 2)
         
-        message = f"""🚨 *TRADE ALERT* 🚨
+        message = f""" *TRADE ALERT* 
 
 {action} *{symbol}*
 
-💵 Entry Price: ${price}
+ Entry Price: ${price}
 
-🎯 *PROFIT TARGETS:*
+ *PROFIT TARGETS:*
    • Take Profit 1: ${target1} (+3%)
    • Take Profit 2: ${target2} (+5%)
 
-🛑 *STOP LOSS:* ${stop} (-1.5%)
+ *STOP LOSS:* ${stop} (-1.5%)
 
-📊 Impact: {impact}/10
-💡 _{reasoning}_
+ *Impact:* {impact}/10
+ 
+*NEWS:* _{reasoning}_
 
-⏰ {datetime.now().strftime('%H:%M:%S')}"""
+ {datetime.now().strftime('%H:%M:%S')}"""
 
     else:
         target1 = round(price * 0.97, 2)
         target2 = round(price * 0.95, 2)
         stop = round(price * 1.015, 2)
         
-        message = f"""🚨 *TRADE ALERT* 🚨
+        message = f""" *TRADE ALERT* 
 
 {action} *{symbol}*
 
-💵 Entry Price: ${price}
+ Entry Price: ${price}
 
-🎯 *PROFIT TARGETS:*
+ *PROFIT TARGETS:*
    • Cover at 1: ${target1} (-3%)
    • Cover at 2: ${target2} (-5%)
 
-🛑 *STOP LOSS:* ${stop} (+1.5%)
+ *STOP LOSS:* ${stop} (+1.5%)
 
-📊 Impact: {impact}/10
-💡 _{reasoning}_
+ Impact: {impact}/10
+*NEWS:* _{reasoning}_
 
-⏰ {datetime.now().strftime('%H:%M:%S')}"""
+ {datetime.now().strftime('%H:%M:%S')}"""
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
@@ -204,12 +205,12 @@ def scan_all_stocks():
             price = get_current_price(symbol)
             
             if price:
-                print(f" 🚨 HIGH IMPACT - Sending alert!")
+                print(f" HIGH IMPACT - Sending alert!")
                 
                 if sentiment == "BULLISH":
-                    action = "🟢 BUY LONG"
+                    action = "BUY LONG"
                 else:
-                    action = "🔴 SHORT"
+                    action = "SHORT"
                 
                 send_telegram_alert(symbol, action, price, impact, reasoning)
                 
