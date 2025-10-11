@@ -194,7 +194,7 @@ def scan_all_stocks():
         print(f"{sentiment} ({impact}/10)", end="")
         
         # Step 3: Only alert on HIGH impact news (7+)
-        if impact >= 7:
+        if impact >= 9:
             price = get_current_price(symbol)
             
             if price:
