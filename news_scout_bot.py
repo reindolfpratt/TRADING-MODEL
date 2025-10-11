@@ -1,6 +1,6 @@
 import feedparser
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import requests
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -23,6 +23,10 @@ STOCKS_TO_MONITOR = [
 # Initialize sentiment analyzer
 analyzer = SentimentIntensityAnalyzer()
 
+# Track recently alerted stocks (prevent duplicates)
+recently_alerted = {}
+COOLDOWN_HOURS = 4  # Don't alert same stock for 4 hours
+
 # ═══════════════════════════════════════════════════════════
 # FUNCTIONS
 # ═══════════════════════════════════════════════════════════
@@ -34,7 +38,7 @@ def get_latest_news_rss(symbol):
         feed = feedparser.parse(url)
         
         articles = []
-        for entry in feed.entries[:3]:  # Top 3 most recent
+        for entry in feed.entries[:3]:
             articles.append({
                 'title': entry.title,
                 'link': entry.link
@@ -52,14 +56,10 @@ def analyze_sentiment_vader(headlines):
     if not headlines:
         return "NEUTRAL", 0, "No news available"
     
-    # Combine all headlines
     text = " ".join([h['title'] for h in headlines])
-    
-    # Get sentiment scores from VADER
     scores = analyzer.polarity_scores(text)
-    compound = scores['compound']  # Overall score (-1 to +1)
+    compound = scores['compound']
     
-    # Determine sentiment and impact score
     if compound >= 0.5:
         sentiment = "BULLISH"
         impact = min(10, int((compound - 0.5) * 20) + 6)
@@ -76,7 +76,6 @@ def analyze_sentiment_vader(headlines):
         sentiment = "NEUTRAL"
         impact = 3
     
-    # Get main headline as reasoning
     reasoning = headlines[0]['title'][:100] if headlines else "No specific news"
     
     return sentiment, impact, reasoning
@@ -106,7 +105,6 @@ def send_telegram_alert(symbol, action, price, impact, reasoning):
         print(f"⚠️ Telegram not configured - Would send: {symbol} {action}")
         return
     
-    # Calculate exact price targets
     if "BUY LONG" in action:
         target1 = round(price * 1.03, 2)
         target2 = round(price * 1.05, 2)
@@ -129,7 +127,7 @@ def send_telegram_alert(symbol, action, price, impact, reasoning):
 
 ⏰ {datetime.now().strftime('%H:%M:%S')}"""
 
-    else:  # SHORT
+    else:
         target1 = round(price * 0.97, 2)
         target2 = round(price * 0.95, 2)
         stop = round(price * 1.015, 2)
@@ -151,7 +149,6 @@ def send_telegram_alert(symbol, action, price, impact, reasoning):
 
 ⏰ {datetime.now().strftime('%H:%M:%S')}"""
 
-    # Send via Telegram Bot API
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
     payload = {
@@ -181,42 +178,52 @@ def scan_all_stocks():
     for symbol in STOCKS_TO_MONITOR:
         print(f"Scanning {symbol}...", end=" ")
         
-        # Step 1: Get latest news
         news = get_latest_news_rss(symbol)
         
         if not news:
             print("No news")
             continue
         
-        # Step 2: Analyze sentiment with AI
         sentiment, impact, reasoning = analyze_sentiment_vader(news)
         
         print(f"{sentiment} ({impact}/10)", end="")
         
-        # Step 3: Only alert on HIGH impact news (7+)
+        # Only alert on impact 9+ (HUGE news only)
         if impact >= 9:
+            # Check cooldown - don't spam same stock
+            now = datetime.now()
+            
+            if symbol in recently_alerted:
+                last_alert_time = recently_alerted[symbol]
+                time_since_alert = (now - last_alert_time).total_seconds() / 3600
+                
+                if time_since_alert < COOLDOWN_HOURS:
+                    print(f" (Already alerted {time_since_alert:.1f}h ago - skipping)")
+                    continue
+            
             price = get_current_price(symbol)
             
             if price:
                 print(f" 🚨 HIGH IMPACT - Sending alert!")
                 
-                # Determine action
                 if sentiment == "BULLISH":
                     action = "🟢 BUY LONG"
                 else:
                     action = "🔴 SHORT"
                 
-                # Send Telegram alert
                 send_telegram_alert(symbol, action, price, impact, reasoning)
-                opportunities_found += 1
                 
-                time.sleep(2)  # Brief pause between alerts
+                # Mark as alerted
+                recently_alerted[symbol] = now
+                
+                opportunities_found += 1
+                time.sleep(2)
             else:
                 print(" (Price unavailable)")
         else:
             print()
         
-        time.sleep(0.5)  # Rate limiting between stocks
+        time.sleep(0.5)
     
     print(f"\n✅ Scan complete! Found {opportunities_found} high-impact opportunities.")
     print(f"⏰ Next scan in 10 minutes\n")
