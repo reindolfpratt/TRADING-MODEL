@@ -2,7 +2,7 @@ name: Daily Trading Signal
 
 on:
   schedule:
-    - cron: '0 11 * * *'  # Runs at 11:00 AM UTC daily
+    - cron: '0 13 * * *'  # Runs at 1:00 PM UTC daily
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
