@@ -10,7 +10,7 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="AI Trading Assistant",
+    page_title="Reindolf AI Trading Assistant",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -19,21 +19,11 @@ st.set_page_config(
 # Custom CSS for beautiful UI
 st.markdown("""
     <style>
-    .main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
     .stApp {
-        background: linear-gradient(to bottom, #1e1e2e, #2d2d44);
-    }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
+        background: #ffffff;  /* White background */
     }
     h1 {
-        color: #ffffff;
+        color: #2c3e50;
         text-align: center;
         font-size: 3rem;
         font-weight: 700;
@@ -47,12 +37,9 @@ st.markdown("""
         font-weight: 600;
         width: 100%;
     }
-    .stButton>button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
     </style>
     """, unsafe_allow_html=True)
+
 
 # Enhanced Trading Strategy Class (same as before)
 class EnhancedTradingStrategy:
@@ -146,10 +133,10 @@ class EnhancedTradingStrategy:
             atr = float(buy_signals.loc[buy_date, 'ATR'])
             
             risk_amount = capital * self.risk_per_trade
-            position_size = int((risk_amount / (atr * 2)) if atr > 0 else 100)
-            position_size = max(1, min(position_size, int(capital / buy_price)))
+            position_sie = int((risk_amount / (atr * 2)) if atr > 0 else 100)
+            position_sie = max(1, min(position_sie, int(capital / buy_price)))
             
-            profit_loss = (sell_price - buy_price) * position_size
+            profit_loss = (sell_price - buy_price) * position_sie
             profit_pct = ((sell_price - buy_price) / buy_price) * 100
             capital += profit_loss
             
@@ -160,7 +147,7 @@ class EnhancedTradingStrategy:
                 'buy_price': round(buy_price, 2),
                 'sell_date': sell_date.date(),
                 'sell_price': round(sell_price, 2),
-                'position_size': position_size,
+                'position_sie': position_sie,
                 'profit_loss': round(profit_loss, 2),
                 'profit_pct': round(profit_pct, 2),
                 'hold_days': hold_days,
@@ -259,11 +246,11 @@ def main():
             long_window = st.slider("Long MA Window", 20, 200, 50)
             risk_per_trade = st.slider("Risk Per Trade (%)", 1, 10, 2) / 100
         
-        analyze_button = st.button("🚀 Analyze Stock", use_container_width=True)
+        analyse_button = st.button("🚀 Analyse Stock", use_container_width=True)
     
     # Main content
     if analyze_button:
-        with st.spinner(f"🔍 Analyzing {symbol}..."):
+        with st.spinner(f"🔍 Analysing {symbol}..."):
             strategy = EnhancedTradingStrategy(
                 symbol=symbol,
                 start_date=start_date.strftime("%Y-%m-%d"),
