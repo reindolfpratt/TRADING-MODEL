@@ -221,7 +221,7 @@ class EnhancedTradingStrategy:
 
 # Streamlit App
 def main():
-    st.markdown("<h1>🤖 AI Trading Assistant</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>Reindolf AI Trading Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #a0a0a0;'>Powered by Moving Average Crossover Strategy with RSI & Volume Filters</p>", unsafe_allow_html=True)
     
     # Sidebar
@@ -229,7 +229,7 @@ def main():
         st.image("https://img.icons8.com/fluency/96/stocks.png", width=80)
         st.title("⚙️ Configuration")
         
-        symbol = st.text_input("📊 Stock Symbol", value="AAPL", help="Enter ticker symbol (e.g., AAPL, TSLA, GME)").upper()
+        symbol = st.text_input("Stock Symbol", value="AAPL", help="Enter ticker symbol (e.g., AAPL, TSLA, GME)").upper()
         
         col1, col2 = st.columns(2)
         with col1:
@@ -246,7 +246,7 @@ def main():
             long_window = st.slider("Long MA Window", 20, 200, 50)
             risk_per_trade = st.slider("Risk Per Trade (%)", 1, 10, 2) / 100
         
-        analyse_button = st.button("🚀 Analyse Stock", use_container_width=True)
+        analyze_button = st.button("Analyse Stock", use_container_width=True)
     
     # Main content
     if analyze_button:
