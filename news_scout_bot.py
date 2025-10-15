@@ -74,7 +74,7 @@ def get_latest_news_rss(symbol):
 def calculate_news_quality_score(headlines):
     """
     Calculate news quality score based on multiple factors
-    Returns: (quality_score, has_high_impact_keywords, is_noise)
+    Returns: (quality_score, has_high__keywords, is_noise)
     """
     if not headlines:
         return 0, False, True
@@ -86,11 +86,11 @@ def calculate_news_quality_score(headlines):
     if noise_count > 0:
         return 0, False, True
     
-    # Count high-impact keywords
+    # Count high- keywords
     bullish_count = sum(1 for keyword in BULLISH_KEYWORDS if keyword in text)
     bearish_count = sum(1 for keyword in BEARISH_KEYWORDS if keyword in text)
     
-    has_high_impact = (bullish_count >= 2 or bearish_count >= 2)
+    has_high_ = (bullish_count >= 2 or bearish_count >= 2)
     
     # Quality scoring
     quality_score = 0
@@ -111,7 +111,7 @@ def calculate_news_quality_score(headlines):
     except:
         pass
     
-    return quality_score, has_high_impact, False
+    return quality_score, has_high_, False
 
 
 def analyze_sentiment_vader(headlines):
@@ -121,7 +121,7 @@ def analyze_sentiment_vader(headlines):
         return "NEUTRAL", 0, "No news available", 0
     
     # Calculate news quality first
-    quality_score, has_high_impact, is_noise = calculate_news_quality_score(headlines)
+    quality_score, has_high_, is_noise = calculate_news_quality_score(headlines)
     
     # REJECT noise immediately
     if is_noise:
@@ -132,10 +132,10 @@ def analyze_sentiment_vader(headlines):
     compound = scores['compound']
     
     # MUCH STRICTER thresholds
-    if compound >= 0.65 and has_high_impact:  # Was 0.5, now 0.65
+    if compound >= 0.65 and has_high_:  # Was 0.5, now 0.65
         sentiment = "BULLISH"
-        impact = min(10, int((compound - 0.65) * 25) + 7)
-    elif compound <= -0.65 and has_high_impact:  # Was -0.5, now -0.65
+         = min(10, int((compound - 0.65) * 25) + 7)
+    elif compound <= -0.65 and has_high_:  # Was -0.5, now -0.65
         sentiment = "BEARISH"
         impact = min(10, int((-compound - 0.65) * 25) + 7)
     else:
@@ -318,7 +318,7 @@ def scan_all_stocks():
         })
         
         # STRICT CRITERIA: Impact 9+, Quality 6+, Strong sentiment
-        if impact >= 9 and quality_score >= 6 and sentiment != "NEUTRAL":
+        if impact >= 4 and quality_score >= 3 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             
             price, momentum = get_price_momentum(symbol)
