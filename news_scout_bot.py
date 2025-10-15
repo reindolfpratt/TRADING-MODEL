@@ -318,7 +318,7 @@ def scan_all_stocks():
         })
         
         # STRICT CRITERIA: Impact 8+, Quality 5+, Strong sentiment
-        if impact >= 6 and quality_score >= 4 and sentiment != "NEUTRAL":
+        if impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             
             price, momentum = get_price_momentum(symbol)
