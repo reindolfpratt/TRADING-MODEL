@@ -20,7 +20,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install yfinance feedparser vaderSentiment requests newspaper3k
+        pip install yfinance feedparser vaderSentiment requests newspaper3k lxml[html_clean]
 
     - name: Run news scout
       env:
