@@ -380,36 +380,7 @@ def scan_all_stocks():
     print(f"\n⏰ Scan completed at {datetime.now().strftime('%H:%M:%S')}")
     print(f"{'='*60}\n")
     
-    # Send daily summary if no alerts were sent
-    if opportunities_found == 0 and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        sorted_results = sorted(detailed_results, key=lambda x: (x['impact'], x['quality']), reverse=True)
-        top_stocks = sorted_results[:3]
-        
-        summary = f"""📊 *MARKET SCAN SUMMARY*
-
-✅ Scanned {len(STOCKS_TO_MONITOR)} stocks
-🎯 No premium opportunities found
-
-*Top 3 Stocks Today:*
-"""
-        for i, stock in enumerate(top_stocks, 1):
-            summary += f"{i}. *{stock['symbol']}* - {stock['sentiment']}\n"
-            summary += f"   Impact: {stock['impact']}/10, Quality: {stock['quality']}/10\n"
-        
-        summary += f"\n⏰ {datetime.now().strftime('%H:%M:%S')}"
-        
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {
-            'chat_id': TELEGRAM_CHAT_ID,
-            'text': summary,
-            'parse_mode': 'Markdown'
-        }
-        
-        try:
-            requests.post(url, json=payload, timeout=10)
-            print("📤 Daily summary sent to Telegram")
-        except Exception as e:
-            print(f"❌ Summary send failed: {e}")
+    
 
 
 # ═══════════════════════════════════════════════════════════
