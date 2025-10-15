@@ -265,45 +265,78 @@ _{reasoning}_
 def scan_all_stocks():
     """Main scanner - STRICT filtering for premium trades only"""
     
-    print(f"\n🔍 Starting PREMIUM market scan at {datetime.now().strftime('%H:%M:%S')}")
-    print(f"📊 Monitoring {len(STOCKS_TO_MONITOR)} stocks for HIGH-QUALITY opportunities...\n")
+    print(f"\n{'='*60}")
+    print(f"🔍 PREMIUM MARKET SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"{'='*60}")
+    print(f"📊 Monitoring {len(STOCKS_TO_MONITOR)} stocks\n")
+    
+    # Check Telegram config
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        print(f"✅ Telegram configured (Token: {TELEGRAM_BOT_TOKEN[:10]}...)")
+    else:
+        print(f"⚠️ WARNING: Telegram NOT configured!")
+        print(f"   TELEGRAM_BOT_TOKEN: {'SET' if TELEGRAM_BOT_TOKEN else 'MISSING'}")
+        print(f"   TELEGRAM_CHAT_ID: {'SET' if TELEGRAM_CHAT_ID else 'MISSING'}")
+    print()
     
     opportunities_found = 0
+    detailed_results = []
     
     for symbol in STOCKS_TO_MONITOR:
-        print(f"Scanning {symbol}...", end=" ")
+        print(f"{'─'*60}")
+        print(f"Scanning {symbol}...")
         
         # Check daily cooldown first
         if not check_daily_cooldown(symbol):
-            print("Already alerted today - skipping")
+            print(f"  ⏭️ Already alerted today - skipping")
             continue
         
         news = get_latest_news_rss(symbol)
         
         if not news:
-            print("No news")
+            print(f"  ℹ️ No news found")
             continue
+        
+        print(f"  📰 Found {len(news)} articles")
+        for i, article in enumerate(news[:2], 1):
+            print(f"     {i}. {article['title'][:80]}...")
         
         sentiment, impact, reasoning, quality_score = analyze_sentiment_vader(news)
         
-        print(f"{sentiment} (Impact: {impact}/10, Quality: {quality_score}/10)", end="")
+        print(f"  📊 Analysis:")
+        print(f"     Sentiment: {sentiment}")
+        print(f"     Impact: {impact}/10")
+        print(f"     Quality: {quality_score}/10")
+        
+        # Store for summary
+        detailed_results.append({
+            'symbol': symbol,
+            'sentiment': sentiment,
+            'impact': impact,
+            'quality': quality_score,
+            'news_count': len(news)
+        })
         
         # STRICT CRITERIA: Impact 9+, Quality 6+, Strong sentiment
         if impact >= 9 and quality_score >= 6 and sentiment != "NEUTRAL":
+            print(f"  ✓ Passes strict criteria!")
             
             price, momentum = get_price_momentum(symbol)
             
             if price:
+                print(f"  💰 Price: ${price}, Momentum: {momentum:+.2f}%")
+                
                 # Additional momentum filter
                 if sentiment == "BULLISH" and momentum < -2:
-                    print(f" ⚠️ Negative momentum {momentum}% - skipping")
+                    print(f"  ⚠️ Negative momentum {momentum}% conflicts with BULLISH - REJECTED")
                     continue
                 
                 if sentiment == "BEARISH" and momentum > 2:
-                    print(f" ⚠️ Positive momentum {momentum}% - skipping")
+                    print(f"  ⚠️ Positive momentum {momentum}% conflicts with BEARISH - REJECTED")
                     continue
                 
-                print(f" 🎯 PREMIUM OPPORTUNITY FOUND!")
+                print(f"  🎯 PREMIUM OPPORTUNITY CONFIRMED!")
+                print(f"  📤 Sending Telegram alert...")
                 
                 if sentiment == "BULLISH":
                     action = "🟢 BUY LONG"
@@ -318,14 +351,34 @@ def scan_all_stocks():
                 opportunities_found += 1
                 time.sleep(2)
             else:
-                print(" (Price unavailable)")
+                print(f"  ❌ Price unavailable")
         else:
-            print()
+            reasons = []
+            if impact < 9:
+                reasons.append(f"Impact too low ({impact}<9)")
+            if quality_score < 6:
+                reasons.append(f"Quality too low ({quality_score}<6)")
+            if sentiment == "NEUTRAL":
+                reasons.append("Sentiment is NEUTRAL")
+            print(f"  ❌ Rejected: {', '.join(reasons)}")
         
         time.sleep(0.5)
     
-    print(f"\n✅ Scan complete! Found {opportunities_found} PREMIUM opportunities.")
-    print(f"⏰ Next scan in 10 minutes\n")
+    print(f"\n{'='*60}")
+    print(f"SCAN SUMMARY")
+    print(f"{'='*60}")
+    print(f"✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}")
+    print(f"🎯 Premium opportunities found: {opportunities_found}")
+    
+    if opportunities_found == 0:
+        print(f"\n📊 Top candidates (didn't meet threshold):")
+        sorted_results = sorted(detailed_results, key=lambda x: (x['impact'], x['quality']), reverse=True)
+        for i, result in enumerate(sorted_results[:5], 1):
+            print(f"   {i}. {result['symbol']}: {result['sentiment']} "
+                  f"(Impact: {result['impact']}/10, Quality: {result['quality']}/10)")
+    
+    print(f"\n⏰ Scan completed at {datetime.now().strftime('%H:%M:%S')}")
+    print(f"{'='*60}\n")
 
 
 # ═══════════════════════════════════════════════════════════
