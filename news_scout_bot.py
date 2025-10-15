@@ -74,7 +74,7 @@ def get_latest_news_rss(symbol):
 def calculate_news_quality_score(headlines):
     """
     Calculate news quality score based on multiple factors
-    Returns: (quality_score, has_high__keywords, is_noise)
+    Returns: (quality_score, has_high_impact_keywords, is_noise)
     """
     if not headlines:
         return 0, False, True
@@ -86,11 +86,11 @@ def calculate_news_quality_score(headlines):
     if noise_count > 0:
         return 0, False, True
     
-    # Count high- keywords
+    # Count high-impact keywords
     bullish_count = sum(1 for keyword in BULLISH_KEYWORDS if keyword in text)
     bearish_count = sum(1 for keyword in BEARISH_KEYWORDS if keyword in text)
     
-    has_high_ = (bullish_count >= 2 or bearish_count >= 2)
+    has_high_impact = (bullish_count >= 2 or bearish_count >= 2)
     
     # Quality scoring
     quality_score = 0
@@ -111,7 +111,7 @@ def calculate_news_quality_score(headlines):
     except:
         pass
     
-    return quality_score, has_high_, False
+    return quality_score, has_high_impact, False
 
 
 def analyze_sentiment_vader(headlines):
@@ -121,7 +121,7 @@ def analyze_sentiment_vader(headlines):
         return "NEUTRAL", 0, "No news available", 0
     
     # Calculate news quality first
-    quality_score, has_high_, is_noise = calculate_news_quality_score(headlines)
+    quality_score, has_high_impact, is_noise = calculate_news_quality_score(headlines)
     
     # REJECT noise immediately
     if is_noise:
@@ -132,10 +132,10 @@ def analyze_sentiment_vader(headlines):
     compound = scores['compound']
     
     # MUCH STRICTER thresholds
-    if compound >= 0.65 and has_high_:  # Was 0.5, now 0.65
+    if compound >= 0.65 and has_high_impact:  # Was 0.5, now 0.65
         sentiment = "BULLISH"
-         = min(10, int((compound - 0.65) * 25) + 7)
-    elif compound <= -0.65 and has_high_:  # Was -0.5, now -0.65
+        impact = min(10, int((compound - 0.65) * 25) + 7)
+    elif compound <= -0.65 and has_high_impact:  # Was -0.5, now -0.65
         sentiment = "BEARISH"
         impact = min(10, int((-compound - 0.65) * 25) + 7)
     else:
@@ -317,8 +317,8 @@ def scan_all_stocks():
             'news_count': len(news)
         })
         
-        # STRICT CRITERIA: Impact 9+, Quality 6+, Strong sentiment
-        if impact >= 7 and quality_score >= 4 and sentiment != "NEUTRAL":
+        # STRICT CRITERIA: Impact 8+, Quality 5+, Strong sentiment
+        if impact >= 6 and quality_score >= 4 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             
             price, momentum = get_price_momentum(symbol)
@@ -379,6 +379,37 @@ def scan_all_stocks():
     
     print(f"\n⏰ Scan completed at {datetime.now().strftime('%H:%M:%S')}")
     print(f"{'='*60}\n")
+    
+    # Send daily summary if no alerts were sent
+    if opportunities_found == 0 and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        sorted_results = sorted(detailed_results, key=lambda x: (x['impact'], x['quality']), reverse=True)
+        top_stocks = sorted_results[:3]
+        
+        summary = f"""📊 *MARKET SCAN SUMMARY*
+
+✅ Scanned {len(STOCKS_TO_MONITOR)} stocks
+🎯 No premium opportunities found
+
+*Top 3 Stocks Today:*
+"""
+        for i, stock in enumerate(top_stocks, 1):
+            summary += f"{i}. *{stock['symbol']}* - {stock['sentiment']}\n"
+            summary += f"   Impact: {stock['impact']}/10, Quality: {stock['quality']}/10\n"
+        
+        summary += f"\n⏰ {datetime.now().strftime('%H:%M:%S')}"
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': summary,
+            'parse_mode': 'Markdown'
+        }
+        
+        try:
+            requests.post(url, json=payload, timeout=10)
+            print("📤 Daily summary sent to Telegram")
+        except Exception as e:
+            print(f"❌ Summary send failed: {e}")
 
 
 # ═══════════════════════════════════════════════════════════
