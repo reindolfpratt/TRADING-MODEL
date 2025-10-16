@@ -10,7 +10,7 @@ warnings.filterwarnings('ignore')
 
 # Page configuration
 st.set_page_config(
-    page_title="Reindolf AI Trading Assistant",
+    page_title="Reindolf Trading Assistant",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -391,7 +391,7 @@ def main():
                     st.info("No trades generated in this period.")
             
             st.divider()
-            st.warning("⚠️ **Disclaimer**: This is NOT financial advice. Always do your own research and never invest more than you can afford to lose. Past performance does NOT guarantee future results.")
+            st.warning("⚠️ **Disclaimer From Reindolf**: This is NOT financial advice. Always do your own research and never invest more than you can afford to lose. Past performance does NOT guarantee future results.")
 
 if __name__ == "__main__":
     main()
