@@ -15,7 +15,6 @@ def get_sp500_tickers():
     df = pd.read_csv(url)
     return list(df['Symbol'])
 
-# CONFIGURATION
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
@@ -139,22 +138,30 @@ def analyze_sentiment_and_score(symbol, articles):
         return sentiment, impact, reasoning, quality_score, art['link']
     return "NEUTRAL", 0, "No relevant news found", 0, ""
 
-def moving_average_confirmation(symbol, sentiment, short_window=20, long_window=50):
+# MA + RSI confirmation!
+def moving_average_and_rsi_confirmation(symbol, sentiment, short_window=20, long_window=50):
     df = yf.download(symbol, period='6mo', interval='1d', progress=False)
     if df.empty or len(df) < long_window + 1:
-        print(f"  [MA] Not enough data for moving average check")
+        print(f"  [MA/RSI] Not enough data for moving average/RSI check")
         return False
     df['Short_MA'] = df['Close'].rolling(window=short_window).mean()
     df['Long_MA'] = df['Close'].rolling(window=long_window).mean()
+    # --- RSI calculation
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
     short_ma = float(df['Short_MA'].iloc[-1])
     long_ma = float(df['Long_MA'].iloc[-1])
-    if sentiment == "BULLISH" and short_ma > long_ma:
-        print(f"  [MA] BULLISH confirmed by MA: Short_MA ({short_ma:.2f}) > Long_MA ({long_ma:.2f})")
+    latest_rsi = float(df['RSI'].iloc[-1])
+    if sentiment == "BULLISH" and short_ma > long_ma and latest_rsi < 70:
+        print(f"  [MA/RSI] BULLISH confirmed: Short_MA ({short_ma:.2f}) > Long_MA ({long_ma:.2f}) and RSI={latest_rsi:.1f} < 70")
         return True
-    if sentiment == "BEARISH" and short_ma < long_ma:
-        print(f"  [MA] BEARISH confirmed by MA: Short_MA ({short_ma:.2f}) < Long_MA ({long_ma:.2f})")
+    if sentiment == "BEARISH" and short_ma < long_ma and latest_rsi > 30:
+        print(f"  [MA/RSI] BEARISH confirmed: Short_MA ({short_ma:.2f}) < Long_MA ({long_ma:.2f}) and RSI={latest_rsi:.1f} > 30")
         return True
-    print(f"  [MA] No confirmation from moving average for {sentiment}")
+    print(f"  [MA/RSI] No confirmation from moving average/RSI for {sentiment} (MA: {short_ma:.2f}, {long_ma:.2f}, RSI: {latest_rsi:.1f})")
     return False
 
 def get_price_momentum(symbol):
@@ -235,12 +242,12 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        # <<<<< NEW LOGIC: Require MA confirmation >>>>>
+        # <<<<< News + MA/RSI filter >>>>>
         if (
-            impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL"
-            and moving_average_confirmation(symbol, sentiment)
+            impact >= 8 and quality_score >= 7 and sentiment != "NEUTRAL"
+            and moving_average_and_rsi_confirmation(symbol, sentiment)
         ):
-            print(f"  ✓ Passes strict criteria AND moving average confirmed!")
+            print(f"  ✓ Passes news, MA & RSI checks!")
             price, momentum = get_price_momentum(symbol)
             if price:
                 print(f"  💰 Price: ${price}, Momentum: {momentum:+.2f}%")
@@ -259,7 +266,7 @@ def scan_all_stocks():
             else:
                 print(f"  ❌ Price unavailable")
         else:
-            print(f"  ❌ Rejected: (Impact/Quality/Sentiment too low, NEUTRAL, or failed MA check)")
+            print(f"  ❌ Rejected: (Impact/Quality/Sentiment/MA/RSI not satisfied)")
         time.sleep(0.5)
     print(f"\n{'='*60}\nSCAN SUMMARY\n{'='*60}\n✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}\n🎯 Premium opportunities found: {opportunities_found}\n")
     print(f"⏰ Scan completed at {datetime.utcnow().strftime('%H:%M:%S UTC')}\n{'='*60}\n")
