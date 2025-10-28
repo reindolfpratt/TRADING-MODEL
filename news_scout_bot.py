@@ -27,7 +27,7 @@ analyzer = SentimentIntensityAnalyzer()
 alerted_today = {}
 
 BULLISH_KEYWORDS = [
-    'earnings beat', 'record profit', 'surge', 'soar', 'breakthrough',
+    'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 'breakthrough',
     'approval', 'deal', 'partnership', 'acquisition', 'upgraded',
     'beats estimates', 'strong growth', 'revenue jump', 'new high',
     'major win', 'expansion', 'breakthrough product'
@@ -108,21 +108,21 @@ def analyze_sentiment_and_score(symbol, articles):
             continue
         if not is_relevant_news(full_content, symbol):
             continue
-        quality_score, has_high_impact, is_noise = calculate_news_quality_score(full_content)
+        quality_score, has_high_, is_noise = calculate_news_quality_score(full_content)
         if is_noise:
             continue
         scores = analyzer.polarity_scores(full_content)
         compound = scores['compound']
-        if compound >= 0.65 and has_high_impact:
+        if compound >= 0.65 and has_high_:
             sentiment = "BULLISH"
-            impact = min(10, int((compound - 0.65) * 25) + 7)
-        elif compound <= -0.65 and has_high_impact:
+             = min(10, int((compound - 0.65) * 25) + 7)
+        elif compound <= -0.65 and has_high_:
             sentiment = "BEARISH"
-            impact = min(10, int((-compound - 0.65) * 25) + 7)
+             = min(10, int((-compound - 0.65) * 25) + 7)
         else:
             sentiment = "NEUTRAL"
-            impact = max(0, quality_score - 2)
-        impact = min(10, int(impact * (quality_score / 10)))
+             = max(0, quality_score - 2)
+         = min(10, int(impact * (quality_score / 10)))
         reasoning = art['title'] if len(art['title']) < 120 else art['title'][:117] + "..."
         return sentiment, impact, reasoning, quality_score, art['link']
     return "NEUTRAL", 0, "No relevant news found", 0, ""
@@ -205,7 +205,7 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        if impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL":
+        if impact >= 6 and quality_score >= 3 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             price, momentum = get_price_momentum(symbol)
             if price:
