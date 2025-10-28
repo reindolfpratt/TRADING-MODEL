@@ -127,17 +127,19 @@ def analyze_sentiment_and_score(symbol, articles):
         compound = scores['compound']
         if compound >= 0.65 and has_high_:
             sentiment = "BULLISH"
-             = min(10, int((compound - 0.65) * 25) + 7)
+            impact = min(10, int((compound - 0.65) * 25) + 7)
         elif compound <= -0.65 and has_high_:
             sentiment = "BEARISH"
-             = min(10, int((-compound - 0.65) * 25) + 7)
+            impact = min(10, int((-compound - 0.65) * 25) + 7)
         else:
             sentiment = "NEUTRAL"
-             = max(0, quality_score - 2)
-         = min(10, int(impact * (quality_score / 10)))
+            impact = max(0, quality_score - 2)
+        # Calculate impact score scaling for NEUTRAL (optional, else remove line below)
+        impact = min(10, int(impact * (quality_score / 10))) if sentiment == "NEUTRAL" else impact
         reasoning = art['title'] if len(art['title']) < 120 else art['title'][:117] + "..."
         return sentiment, impact, reasoning, quality_score, art['link']
     return "NEUTRAL", 0, "No relevant news found", 0, ""
+
 
 def get_price_momentum(symbol):
     try:
