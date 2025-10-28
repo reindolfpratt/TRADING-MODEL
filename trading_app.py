@@ -44,7 +44,7 @@ st.markdown("""
 # Enhanced Trading Strategy Class (same as before)
 class EnhancedTradingStrategy:
     def __init__(self, symbol, start_date, end_date, short_window=20, 
-                 long_window=50, initial_capital=10000, 
+                 long_window=50, initial_capital=100, 
                  risk_per_trade=0.02, stop_loss_pct=0.05):
         self.symbol = symbol
         self.start_date = start_date
@@ -133,10 +133,10 @@ class EnhancedTradingStrategy:
             atr = float(buy_signals.loc[buy_date, 'ATR'])
             
             risk_amount = capital * self.risk_per_trade
-            position_sie = int((risk_amount / (atr * 2)) if atr > 0 else 100)
-            position_sie = max(1, min(position_sie, int(capital / buy_price)))
+            position_size = int((risk_amount / (atr * 2)) if atr > 0 else 100)
+            position_size = max(1, min(position_size, int(capital / buy_price)))
             
-            profit_loss = (sell_price - buy_price) * position_sie
+            profit_loss = (sell_price - buy_price) * position_size
             profit_pct = ((sell_price - buy_price) / buy_price) * 100
             capital += profit_loss
             
@@ -147,7 +147,7 @@ class EnhancedTradingStrategy:
                 'buy_price': round(buy_price, 2),
                 'sell_date': sell_date.date(),
                 'sell_price': round(sell_price, 2),
-                'position_sie': position_sie,
+                'position_size': position_size,
                 'profit_loss': round(profit_loss, 2),
                 'profit_pct': round(profit_pct, 2),
                 'hold_days': hold_days,
@@ -233,11 +233,11 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date", value=datetime.now() - timedelta(days=365))
+            start_date = st.date_input("Start Date", value=datetime.now() - timedelta(days=90))
         with col2:
             end_date = st.date_input("End Date", value=datetime.now())
         
-        initial_capital = st.number_input("💰 Initial Capital ($)", min_value=100, value=10000, step=100)
+        initial_capital = st.number_input("💰 Initial Capital ($)", min_value=100, value=100, step=10)
         
         st.divider()
         
@@ -272,7 +272,7 @@ def main():
             current_signal = strategy.get_current_signal()
             
             # Current Signal Section
-            st.markdown("### 🎯 Current Recommendation")
+            st.markdown(f"### 🎯 Current Recommendation for {symbol}")
             
             if current_signal:
                 signal_val = current_signal['signal']
@@ -281,16 +281,16 @@ def main():
                 
                 with col1:
                     if signal_val == 1:
-                        st.success("### 🟢 BUY SIGNAL")
-                        st.write("**Strategy suggests BUYING this stock**")
+                        st.success(f"### 🟢 BUY SIGNAL for {symbol}")
+                        st.write(f"**Strategy suggests BUYING {symbol}**")
                         st.write("Short-term trend crossed above long-term trend (bullish)")
                     elif signal_val == -1:
-                        st.error("### 🔴 SELL SIGNAL")
-                        st.write("**Strategy suggests SELLING or staying OUT**")
+                        st.error(f"### 🔴 SELL SIGNAL for {symbol}")
+                        st.write(f"**Strategy suggests SELLING or staying OUT of {symbol}**")
                         st.write("Short-term trend crossed below long-term trend (bearish)")
                     else:
-                        st.warning("### ⚪ WAIT")
-                        st.write("**Strategy suggests WAITING (no clear signal)**")
+                        st.warning(f"### ⚪ WAIT on {symbol}")
+                        st.write(f"**Strategy suggests WAITING (no clear signal for {symbol})**")
                         st.write("Conditions not met for buy or sell")
                 
                 with col2:
@@ -307,7 +307,7 @@ def main():
             
             # Performance Metrics
             if metrics:
-                st.markdown("### 📊 Strategy Performance")
+                st.markdown(f"### 📊 Strategy Performance for {symbol}")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -328,14 +328,14 @@ def main():
                 st.divider()
                 
                 # Interactive Chart with Plotly
-                st.markdown("### 📈 Price Chart with Signals")
+                st.markdown(f"### 📈 Price Chart with Signals for {symbol}")
                 
                 fig = make_subplots(
                     rows=3, cols=1,
                     shared_xaxes=True,
                     vertical_spacing=0.05,
                     row_heights=[0.6, 0.2, 0.2],
-                    subplot_titles=('Price & Moving Averages', 'RSI', 'Volume')
+                    subplot_titles=(f'{symbol} Price & Moving Averages', 'RSI', 'Volume')
                 )
                 
                 # Price and MAs
@@ -377,18 +377,6 @@ def main():
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # Trade History
-                st.markdown("### 📜 Trade History")
-                
-                if trades:
-                    df_trades = pd.DataFrame(trades)
-                    df_trades['emoji'] = df_trades['profit_loss'].apply(lambda x: '🟢' if x > 0 else '🔴')
-                    df_trades = df_trades[['emoji', 'buy_date', 'buy_price', 'sell_date', 'sell_price', 
-                                          'position_size', 'profit_loss', 'profit_pct', 'hold_days']]
-                    st.dataframe(df_trades, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No trades generated in this period.")
             
             st.divider()
             st.warning("⚠️ **Disclaimer From Reindolf**: This is NOT financial advice. Always do your own research and never invest more than you can afford to lose. Past performance does NOT guarantee future results.")
