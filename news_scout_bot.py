@@ -219,7 +219,7 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        if impact >= 6 and quality_score >= 3 and sentiment != "NEUTRAL":
+        if impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             price, momentum = get_price_momentum(symbol)
             if price:
