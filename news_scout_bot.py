@@ -10,16 +10,12 @@ from newspaper import Article
 import pandas as pd
 from dateutil import parser as dateparser
 
-# Get latest S&P 500 tickers from GitHub raw file
 def get_sp500_tickers():
     url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
     df = pd.read_csv(url)
     return list(df['Symbol'])
 
-# ════════════════════════════════════
 # CONFIGURATION
-# ════════════════════════════════════
-
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
@@ -54,24 +50,20 @@ NOISE_KEYWORDS = [
     'technical analysis', 'chart', 'levels to watch'
 ]
 
-# ════════════════════════════════════
-# FUNCTIONS
-# ════════════════════════════════════
-
 def get_latest_news_rss(symbol):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
     feed = feedparser.parse(url)
     articles = []
-    cutoff = datetime.utcnow() - timedelta(days=2)  # Only recent news, change '2' as needed
+    cutoff = datetime.utcnow() - timedelta(days=2)
     for entry in feed.entries[:7]:
         pub_str = entry.get('published', '') or entry.get('pubDate', '')
         if pub_str:
             try:
                 pub_dt = dateparser.parse(pub_str)
                 if pub_dt < cutoff:
-                    continue  # Skip old news
+                    continue
             except Exception:
-                pass  # if date can't be parsed, include just in case
+                pass
         articles.append({
             'title': entry.title,
             'link': entry.link,
@@ -146,6 +138,24 @@ def analyze_sentiment_and_score(symbol, articles):
         reasoning = art['title'] if len(art['title']) < 120 else art['title'][:117] + "..."
         return sentiment, impact, reasoning, quality_score, art['link']
     return "NEUTRAL", 0, "No relevant news found", 0, ""
+
+def moving_average_confirmation(symbol, sentiment, short_window=20, long_window=50):
+    df = yf.download(symbol, period='6mo', interval='1d', progress=False)
+    if df.empty or len(df) < long_window + 1:
+        print(f"  [MA] Not enough data for moving average check")
+        return False
+    df['Short_MA'] = df['Close'].rolling(window=short_window).mean()
+    df['Long_MA'] = df['Close'].rolling(window=long_window).mean()
+    short_ma = float(df['Short_MA'].iloc[-1])
+    long_ma = float(df['Long_MA'].iloc[-1])
+    if sentiment == "BULLISH" and short_ma > long_ma:
+        print(f"  [MA] BULLISH confirmed by MA: Short_MA ({short_ma:.2f}) > Long_MA ({long_ma:.2f})")
+        return True
+    if sentiment == "BEARISH" and short_ma < long_ma:
+        print(f"  [MA] BEARISH confirmed by MA: Short_MA ({short_ma:.2f}) < Long_MA ({long_ma:.2f})")
+        return True
+    print(f"  [MA] No confirmation from moving average for {sentiment}")
+    return False
 
 def get_price_momentum(symbol):
     try:
@@ -225,8 +235,12 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        if impact >= 8 and quality_score >= 7 and sentiment != "NEUTRAL":
-            print(f"  ✓ Passes strict criteria!")
+        # <<<<< NEW LOGIC: Require MA confirmation >>>>>
+        if (
+            impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL"
+            and moving_average_confirmation(symbol, sentiment)
+        ):
+            print(f"  ✓ Passes strict criteria AND moving average confirmed!")
             price, momentum = get_price_momentum(symbol)
             if price:
                 print(f"  💰 Price: ${price}, Momentum: {momentum:+.2f}%")
@@ -245,7 +259,7 @@ def scan_all_stocks():
             else:
                 print(f"  ❌ Price unavailable")
         else:
-            print(f"  ❌ Rejected: (Impact/Quality/Sentiment too low or NEUTRAL)")
+            print(f"  ❌ Rejected: (Impact/Quality/Sentiment too low, NEUTRAL, or failed MA check)")
         time.sleep(0.5)
     print(f"\n{'='*60}\nSCAN SUMMARY\n{'='*60}\n✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}\n🎯 Premium opportunities found: {opportunities_found}\n")
     print(f"⏰ Scan completed at {datetime.utcnow().strftime('%H:%M:%S UTC')}\n{'='*60}\n")
