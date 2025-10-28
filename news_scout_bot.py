@@ -8,6 +8,7 @@ import os
 import re
 from newspaper import Article
 import pandas as pd
+from dateutil import parser as dateparser
 
 # Get latest S&P 500 tickers from GitHub raw file
 def get_sp500_tickers():
@@ -27,7 +28,6 @@ analyzer = SentimentIntensityAnalyzer()
 alerted_today = {}
 
 BULLISH_KEYWORDS = [
-    # Original
     'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 
     'breakthrough', 'approval', 'deal', 'partnership', 'acquisition', 
     'upgraded', 'beats estimates', 'strong growth', 'revenue jump', 
@@ -40,7 +40,6 @@ BULLISH_KEYWORDS = [
 ]
 
 BEARISH_KEYWORDS = [
-    # Original
     'plunge', 'crash', 'downgrade', 'lawsuit', 'investigation', 
     'miss', 'disappoints', 'loses', 'cuts guidance', 'bankruptcy', 
     'scandal', 'recall', 'suspended', 'warning', 'fraud',
@@ -63,11 +62,20 @@ def get_latest_news_rss(symbol):
     url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
     feed = feedparser.parse(url)
     articles = []
-    for entry in feed.entries[:7]:  # Get several for skipping capability
+    cutoff = datetime.utcnow() - timedelta(days=2)  # Only recent news, change '2' as needed
+    for entry in feed.entries[:7]:
+        pub_str = entry.get('published', '') or entry.get('pubDate', '')
+        if pub_str:
+            try:
+                pub_dt = dateparser.parse(pub_str)
+                if pub_dt < cutoff:
+                    continue  # Skip old news
+            except Exception:
+                pass  # if date can't be parsed, include just in case
         articles.append({
             'title': entry.title,
             'link': entry.link,
-            'published': entry.get('published', '')
+            'published': pub_str
         })
     return articles
 
@@ -134,12 +142,10 @@ def analyze_sentiment_and_score(symbol, articles):
         else:
             sentiment = "NEUTRAL"
             impact = max(0, quality_score - 2)
-        # Calculate impact score scaling for NEUTRAL (optional, else remove line below)
         impact = min(10, int(impact * (quality_score / 10))) if sentiment == "NEUTRAL" else impact
         reasoning = art['title'] if len(art['title']) < 120 else art['title'][:117] + "..."
         return sentiment, impact, reasoning, quality_score, art['link']
     return "NEUTRAL", 0, "No relevant news found", 0, ""
-
 
 def get_price_momentum(symbol):
     try:
@@ -219,7 +225,7 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        if impact >= 8 and quality_score >= 5 and sentiment != "NEUTRAL":
+        if impact >= 8 and quality_score >= 6 and sentiment != "NEUTRAL":
             print(f"  ✓ Passes strict criteria!")
             price, momentum = get_price_momentum(symbol)
             if price:
