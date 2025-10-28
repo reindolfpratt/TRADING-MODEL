@@ -8,6 +8,14 @@ from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
+# Helper for company name lookup (using yfinance info)
+def get_company_name(ticker):
+    try:
+        info = yf.Ticker(ticker).info
+        return info.get("longName", ticker)
+    except Exception:
+        return ticker
+
 # Page configuration
 st.set_page_config(
     page_title="Reindolf Trading Assistant",
@@ -40,8 +48,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-
-# Enhanced Trading Strategy Class (same as before)
 class EnhancedTradingStrategy:
     def __init__(self, symbol, start_date, end_date, short_window=20, 
                  long_window=50, initial_capital=100, 
@@ -219,7 +225,6 @@ class EnhancedTradingStrategy:
             'date': self.data.index[-1].date()
         }
 
-# Streamlit App
 def main():
     st.markdown("<h1>Reindolf AI Trading Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #a0a0a0;'>Powered by Moving Average Crossover Strategy with RSI & Volume Filters</p>", unsafe_allow_html=True)
@@ -248,9 +253,9 @@ def main():
         
         analyze_button = st.button("Analyse Stock", use_container_width=True)
     
-    # Main content
     if analyze_button:
         with st.spinner(f"🔍 Analysing {symbol}..."):
+            company_name = get_company_name(symbol)
             strategy = EnhancedTradingStrategy(
                 symbol=symbol,
                 start_date=start_date.strftime("%Y-%m-%d"),
@@ -262,7 +267,7 @@ def main():
             )
             
             if not strategy.fetch_data():
-                st.error(f"❌ Could not fetch data for {symbol}. Please check the symbol and try again.")
+                st.error(f"❌ Could not fetch data for {company_name}. Please check the symbol and try again.")
                 return
             
             strategy.calculate_indicators()
@@ -271,32 +276,28 @@ def main():
             metrics = strategy.calculate_metrics(trades, final_capital)
             current_signal = strategy.get_current_signal()
             
-            # Current Signal Section
-            st.markdown(f"### 🎯 Current Recommendation for {symbol}")
+            st.markdown(f"### 🎯 Current Recommendation for {company_name}")
             
             if current_signal:
                 signal_val = current_signal['signal']
                 
                 col1, col2, col3 = st.columns([2, 1, 1])
-                
                 with col1:
                     if signal_val == 1:
-                        st.success(f"### 🟢 BUY SIGNAL for {symbol}")
-                        st.write(f"**Strategy suggests BUYING {symbol}**")
+                        st.success(f"### 🟢 BUY SIGNAL for {company_name}")
+                        st.write(f"**Strategy suggests BUYING {company_name}**")
                         st.write("Short-term trend crossed above long-term trend (bullish)")
                     elif signal_val == -1:
-                        st.error(f"### 🔴 SELL SIGNAL for {symbol}")
-                        st.write(f"**Strategy suggests SELLING or staying OUT of {symbol}**")
+                        st.error(f"### 🔴 SELL SIGNAL for {company_name}")
+                        st.write(f"**Strategy suggests SELLING or staying OUT of {company_name}**")
                         st.write("Short-term trend crossed below long-term trend (bearish)")
                     else:
-                        st.warning(f"### ⚪ WAIT on {symbol}")
-                        st.write(f"**Strategy suggests WAITING (no clear signal for {symbol})**")
+                        st.warning(f"### ⚪ WAIT on {company_name}")
+                        st.write(f"**Strategy suggests WAITING (no clear signal for {company_name})**")
                         st.write("Conditions not met for buy or sell")
-                
                 with col2:
                     st.metric("Current Price", f"${current_signal['price']:.2f}")
                     st.metric("RSI", f"{current_signal['rsi']:.2f}")
-                
                 with col3:
                     trend = "📈 Uptrend" if current_signal['short_ma'] > current_signal['long_ma'] else "📉 Downtrend"
                     st.metric("Trend", trend)
@@ -305,40 +306,29 @@ def main():
             
             st.divider()
             
-            # Performance Metrics
             if metrics:
-                st.markdown(f"### 📊 Strategy Performance for {symbol}")
-                
+                st.markdown(f"### 📊 Strategy Performance for {company_name}")
                 col1, col2, col3, col4 = st.columns(4)
-                
                 with col1:
                     st.metric("Total Return", f"${metrics['total_return']:,.2f}", 
                              delta=f"{metrics['total_return_pct']:.2f}%")
-                
                 with col2:
                     st.metric("Win Rate", f"{metrics['win_rate']}%", 
                              delta=f"{metrics['winning_trades']}W / {metrics['losing_trades']}L")
-                
                 with col3:
                     st.metric("Profit Factor", f"{metrics['profit_factor']:.2f}")
-                
                 with col4:
                     st.metric("Sharpe Ratio", f"{metrics['sharpe_ratio']:.2f}")
-                
                 st.divider()
                 
-                # Interactive Chart with Plotly
-                st.markdown(f"### 📈 Price Chart with Signals for {symbol}")
-                
+                st.markdown(f"### 📈 Price Chart with Signals for {company_name}")
                 fig = make_subplots(
                     rows=3, cols=1,
                     shared_xaxes=True,
                     vertical_spacing=0.05,
                     row_heights=[0.6, 0.2, 0.2],
-                    subplot_titles=(f'{symbol} Price & Moving Averages', 'RSI', 'Volume')
+                    subplot_titles=(f'{company_name} Price & Moving Averages', 'RSI', 'Volume')
                 )
-                
-                # Price and MAs
                 fig.add_trace(go.Scatter(x=strategy.data.index, y=strategy.data['Close'], 
                                         name='Close', line=dict(color='#667eea', width=2)), row=1, col=1)
                 fig.add_trace(go.Scatter(x=strategy.data.index, y=strategy.data['Short_MA'], 
@@ -346,10 +336,8 @@ def main():
                 fig.add_trace(go.Scatter(x=strategy.data.index, y=strategy.data['Long_MA'], 
                                         name=f'{long_window}MA', line=dict(color='#4facfe', width=1.5)), row=1, col=1)
                 
-                # Buy/Sell signals
                 buy_signals = strategy.data[strategy.data['Signal'].diff() == 1]
                 sell_signals = strategy.data[strategy.data['Signal'].diff() == -1]
-                
                 fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals['Close'], 
                                         mode='markers', name='Buy', 
                                         marker=dict(color='green', size=10, symbol='triangle-up')), row=1, col=1)
@@ -357,25 +345,21 @@ def main():
                                         mode='markers', name='Sell', 
                                         marker=dict(color='red', size=10, symbol='triangle-down')), row=1, col=1)
                 
-                # RSI
                 fig.add_trace(go.Scatter(x=strategy.data.index, y=strategy.data['RSI'], 
                                         name='RSI', line=dict(color='purple', width=1.5)), row=2, col=1)
                 fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
                 fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
                 
-                # Volume
                 colors = ['green' if strategy.data['Close'].iloc[i] >= strategy.data['Open'].iloc[i] 
                          else 'red' for i in range(len(strategy.data))]
                 fig.add_trace(go.Bar(x=strategy.data.index, y=strategy.data['Volume'], 
                                     name='Volume', marker_color=colors), row=3, col=1)
-                
                 fig.update_layout(
                     height=800,
                     template='plotly_dark',
                     showlegend=True,
                     hovermode='x unified'
                 )
-                
                 st.plotly_chart(fig, use_container_width=True)
             
             st.divider()
