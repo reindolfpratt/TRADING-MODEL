@@ -7,6 +7,14 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import os
 import re
 from newspaper import Article
+import pandas as pd
+
+# Get latest S&P 500 tickers from Wikipedia
+def get_sp500_tickers():
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(url)
+    df = tables[0]
+    return list(df['Symbol'])
 
 # ════════════════════════════════════
 # CONFIGURATION
@@ -14,28 +22,8 @@ from newspaper import Article
 
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
-STOCKS_TO_MONITOR = [
-    "AAPL", "TSLA", "NVDA", "AMZN", "GOOGL",
-    "MSFT", "META", "NFLX", "AMD", "COIN",
-    "SPY", "QQQ", "DIS", "PLTR", "SOFI"
-]
-TICKER_TO_COMPANY = {
-    "AAPL": "Apple",
-    "TSLA": "Tesla",
-    "NVDA": "Nvidia",
-    "AMZN": "Amazon",
-    "GOOGL": "Google",
-    "MSFT": "Microsoft",
-    "META": "Meta",
-    "NFLX": "Netflix",
-    "AMD": "AMD",
-    "COIN": "Coinbase",
-    "SPY": "SPDR S&P 500 ETF",
-    "QQQ": "Invesco QQQ Trust",
-    "DIS": "Disney",
-    "PLTR": "Palantir",
-    "SOFI": "SoFi Technologies"
-}
+
+STOCKS_TO_MONITOR = get_sp500_tickers()
 analyzer = SentimentIntensityAnalyzer()
 alerted_today = {}
 
@@ -73,14 +61,9 @@ def get_latest_news_rss(symbol):
     return articles
 
 def is_relevant_news(text, symbol):
-    company = TICKER_TO_COMPANY.get(symbol, "")
     text_lower = text.lower()
     symbol_lower = symbol.lower()
-    company_lower = company.lower()
-    # Check if symbol or company name in text
     if symbol_lower in text_lower:
-        return True
-    if company_lower and company_lower in text_lower:
         return True
     if re.search(rf'(\${symbol_lower}|(?<!\w){symbol_lower}(?!\w))', text_lower):
         return True
@@ -92,7 +75,6 @@ def fetch_full_article_content(link):
         article.download()
         article.parse()
         text = article.text
-        # Only return if there's enough text content (not an error or short redirect)
         if not text or len(text.split()) < 100:
             return None
         return text.strip()
@@ -104,16 +86,13 @@ def calculate_news_quality_score(text):
     if not text:
         return 0, False, True
     news_lower = text.lower()
-    # Check for noise
     noise_count = sum(1 for keyword in NOISE_KEYWORDS if keyword in news_lower)
     if noise_count > 0:
         return 0, False, True
-    # Impact keywords
     bullish_count = sum(1 for keyword in BULLISH_KEYWORDS if keyword in news_lower)
     bearish_count = sum(1 for keyword in BEARISH_KEYWORDS if keyword in news_lower)
     has_high_impact = (bullish_count >= 2 or bearish_count >= 2)
     quality_score = min(bullish_count + bearish_count, 5)
-    # Add bonus for longer article
     word_count = len(news_lower.split())
     if word_count > 300:
         quality_score += 2
@@ -123,16 +102,13 @@ def calculate_news_quality_score(text):
 
 def analyze_sentiment_and_score(symbol, articles):
     for art in articles:
-        # Only analyze if relevant headline
         if not is_relevant_news(art['title'], symbol):
             continue
         full_content = fetch_full_article_content(art['link'])
         if not full_content:
             continue
-        # Double relevance check on the actual article content, not just headline
         if not is_relevant_news(full_content, symbol):
             continue
-        # Score news content
         quality_score, has_high_impact, is_noise = calculate_news_quality_score(full_content)
         if is_noise:
             continue
@@ -149,9 +125,7 @@ def analyze_sentiment_and_score(symbol, articles):
             impact = max(0, quality_score - 2)
         impact = min(10, int(impact * (quality_score / 10)))
         reasoning = art['title'] if len(art['title']) < 120 else art['title'][:117] + "..."
-        # Return first valid/relevant article's signal
         return sentiment, impact, reasoning, quality_score, art['link']
-    # If nothing relevant found
     return "NEUTRAL", 0, "No relevant news found", 0, ""
 
 def get_price_momentum(symbol):
@@ -256,10 +230,6 @@ def scan_all_stocks():
         time.sleep(0.5)
     print(f"\n{'='*60}\nSCAN SUMMARY\n{'='*60}\n✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}\n🎯 Premium opportunities found: {opportunities_found}\n")
     print(f"⏰ Scan completed at {datetime.utcnow().strftime('%H:%M:%S UTC')}\n{'='*60}\n")
-
-# ════════════════════════════════
-# RUN THE SCANNER
-# ════════════════════════════════
 
 if __name__ == "__main__":
     scan_all_stocks()
