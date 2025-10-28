@@ -9,6 +9,7 @@ import re
 from newspaper import Article
 import pandas as pd
 from dateutil import parser as dateparser
+import json
 
 def get_sp500_tickers():
     url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
@@ -22,7 +23,49 @@ STOCKS_TO_MONITOR = get_sp500_tickers()
 analyzer = SentimentIntensityAnalyzer()
 
 ALERT_COOLDOWN_DAYS = 2
-alerted_recently = {}  # symbol: datetime of last alert
+COOLDOWN_FILE = "alert_cooldown.json"
+
+# Load cooldown data from file
+def load_cooldown_data():
+    """Load the alert cooldown data from JSON file"""
+    if os.path.exists(COOLDOWN_FILE):
+        try:
+            with open(COOLDOWN_FILE, 'r') as f:
+                data = json.load(f)
+                # Convert ISO strings back to datetime objects
+                return {symbol: datetime.fromisoformat(timestamp) 
+                       for symbol, timestamp in data.items()}
+        except Exception as e:
+            print(f"⚠️ Error loading cooldown data: {e}")
+            return {}
+    return {}
+
+# Save cooldown data to file
+def save_cooldown_data(alerted_recently):
+    """Save the alert cooldown data to JSON file"""
+    try:
+        # Convert datetime objects to ISO format strings
+        data = {symbol: timestamp.isoformat() 
+               for symbol, timestamp in alerted_recently.items()}
+        with open(COOLDOWN_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Error saving cooldown data: {e}")
+
+# Clean up old entries from cooldown data
+def cleanup_old_cooldown_entries(alerted_recently):
+    """Remove entries older than ALERT_COOLDOWN_DAYS to keep file clean"""
+    now = datetime.now()
+    cutoff = now - timedelta(days=ALERT_COOLDOWN_DAYS)
+    symbols_to_remove = [symbol for symbol, timestamp in alerted_recently.items() 
+                        if timestamp < cutoff]
+    for symbol in symbols_to_remove:
+        del alerted_recently[symbol]
+    return alerted_recently
+
+# Initialize cooldown dictionary from file
+alerted_recently = load_cooldown_data()
+print(f"📂 Loaded {len(alerted_recently)} symbols from cooldown file")
 
 BULLISH_KEYWORDS = [
     'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 
@@ -181,10 +224,15 @@ def get_price_momentum(symbol):
         return None, 0
 
 def check_cooldown(symbol):
+    """Check if enough time has passed since the last alert for this symbol"""
     now = datetime.now()
     if symbol in alerted_recently:
         last_alert = alerted_recently[symbol]
-        if (now - last_alert).days < ALERT_COOLDOWN_DAYS:
+        days_since_alert = (now - last_alert).days
+        hours_since_alert = (now - last_alert).total_seconds() / 3600
+        
+        if days_since_alert < ALERT_COOLDOWN_DAYS:
+            print(f"  ⏭️ Already alerted {days_since_alert} days and {hours_since_alert % 24:.1f} hours ago - skipping")
             return False
     return True
 
@@ -222,13 +270,23 @@ def send_telegram_alert(symbol, action, price, impact, reasoning, momentum, qual
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code == 200:
             print(f"✅ Telegram alert sent for {symbol}")
+            # Update cooldown timestamp and save to file
+            alerted_recently[symbol] = datetime.now()
+            save_cooldown_data(alerted_recently)
+            print(f"💾 Cooldown timestamp saved for {symbol}")
         else:
             print(f"❌ Telegram failed: {response.text}")
     except Exception as e:
         print(f"❌ Telegram error: {e}")
 
 def scan_all_stocks():
-    print(f"{'='*60}\n🔍 PREMIUM MARKET SCAN - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n{'='*60}\n📊 Monitoring {len(STOCKS_TO_MONITOR)} stocks\n")
+    global alerted_recently
+    
+    # Clean up old entries at the start of each scan
+    alerted_recently = cleanup_old_cooldown_entries(alerted_recently)
+    save_cooldown_data(alerted_recently)
+    
+    print(f"{'='*60}\n🔍 PREMIUM MARKET SCAN - {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n{'='*60}\n📊 Monitoring {len(STOCKS_TO_MONITOR)} stocks\n🔒 Active cooldowns: {len(alerted_recently)} symbols\n")
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         print(f"✅ Telegram configured (Token: {TELEGRAM_BOT_TOKEN[:10]}...)")
     else:
@@ -237,7 +295,6 @@ def scan_all_stocks():
     for symbol in STOCKS_TO_MONITOR:
         print(f"{'─'*60}\nScanning {symbol}...")
         if not check_cooldown(symbol):
-            print(f"  ⏭️ Already alerted in last {ALERT_COOLDOWN_DAYS} days - skipping")
             continue
         articles = get_latest_news_rss(symbol)
         if not articles:
@@ -263,7 +320,6 @@ def scan_all_stocks():
                 print(f"  🎯 PREMIUM OPPORTUNITY CONFIRMED! 📤 Sending Telegram alert...")
                 action = "🟢 BUY LONG" if sentiment == "BULLISH" else "🔴 SHORT"
                 send_telegram_alert(symbol, action, price, impact, reasoning, momentum, quality_score, link)
-                alerted_recently[symbol] = datetime.now()
                 opportunities_found += 1
                 time.sleep(2)
             else:
@@ -271,7 +327,7 @@ def scan_all_stocks():
         else:
             print(f"  ❌ Rejected: (Impact/Quality/Sentiment/MA/RSI not satisfied)")
         time.sleep(0.5)
-    print(f"\n{'='*60}\nSCAN SUMMARY\n{'='*60}\n✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}\n🎯 Premium opportunities found: {opportunities_found}\n")
+    print(f"\n{'='*60}\nSCAN SUMMARY\n{'='*60}\n✅ Stocks scanned: {len(STOCKS_TO_MONITOR)}\n🎯 Premium opportunities found: {opportunities_found}\n🔒 Total symbols on cooldown: {len(alerted_recently)}\n")
     print(f"⏰ Scan completed at {datetime.utcnow().strftime('%H:%M:%S UTC')}\n{'='*60}\n")
 
 if __name__ == "__main__":
