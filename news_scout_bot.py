@@ -27,15 +27,27 @@ analyzer = SentimentIntensityAnalyzer()
 alerted_today = {}
 
 BULLISH_KEYWORDS = [
-    'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 'breakthrough',
-    'approval', 'deal', 'partnership', 'acquisition', 'upgraded',
-    'beats estimates', 'strong growth', 'revenue jump', 'new high',
-    'major win', 'expansion', 'breakthrough product'
+    # Original
+    'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 
+    'breakthrough', 'approval', 'deal', 'partnership', 'acquisition', 
+    'upgraded', 'beats estimates', 'strong growth', 'revenue jump', 
+    'new high', 'major win', 'expansion', 'breakthrough product',
+    'buyback', 'raises outlook', 'guidance raised', 'outperforms', 
+    'increases dividend', 'record sales', 'positive forecast', 
+    'achieves milestone', 'profit rises', 'beats guidance', 
+    'initiates dividend', 'unveils', 'launch', 'all-time high', 
+    'surpassed expectations', 'resilient demand'
 ]
+
 BEARISH_KEYWORDS = [
-    'plunge', 'crash', 'downgrade', 'lawsuit', 'investigation',
-    'miss', 'disappoints', 'loses', 'cuts guidance', 'bankruptcy',
-    'scandal', 'recall', 'suspended', 'warning', 'fraud'
+    # Original
+    'plunge', 'crash', 'downgrade', 'lawsuit', 'investigation', 
+    'miss', 'disappoints', 'loses', 'cuts guidance', 'bankruptcy', 
+    'scandal', 'recall', 'suspended', 'warning', 'fraud',
+    'profit warning', 'misses expectations', 'slumps', 'profit falls', 
+    'guidance cut', 'dividend cut', 'default', 'layoff', 'fires ceo', 
+    'restatement', 'delisted', 'weak demand', 'slashed forecast', 
+    'cutbacks', 'cut jobs', 'downgraded', 'resignation', 'missed estimates'
 ]
 NOISE_KEYWORDS = [
     'analyst says', 'could', 'might', 'may', 'opinion',
