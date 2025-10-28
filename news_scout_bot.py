@@ -20,7 +20,9 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 STOCKS_TO_MONITOR = get_sp500_tickers()
 analyzer = SentimentIntensityAnalyzer()
-alerted_today = {}
+
+ALERT_COOLDOWN_DAYS = 2
+alerted_recently = {}  # symbol: datetime of last alert
 
 BULLISH_KEYWORDS = [
     'earnings beat', 'record profit', 'surge', 'soar', 'layoff', 
@@ -178,10 +180,12 @@ def get_price_momentum(symbol):
         print(f"Price error for {symbol}: {e}")
         return None, 0
 
-def check_daily_cooldown(symbol):
-    today = datetime.now().date()
-    if symbol in alerted_today and alerted_today[symbol] == today:
-        return False
+def check_cooldown(symbol):
+    now = datetime.now()
+    if symbol in alerted_recently:
+        last_alert = alerted_recently[symbol]
+        if (now - last_alert).days < ALERT_COOLDOWN_DAYS:
+            return False
     return True
 
 def send_telegram_alert(symbol, action, price, impact, reasoning, momentum, quality_score, link):
@@ -232,8 +236,8 @@ def scan_all_stocks():
     opportunities_found = 0
     for symbol in STOCKS_TO_MONITOR:
         print(f"{'─'*60}\nScanning {symbol}...")
-        if not check_daily_cooldown(symbol):
-            print(f"  ⏭️ Already alerted today - skipping")
+        if not check_cooldown(symbol):
+            print(f"  ⏭️ Already alerted in last {ALERT_COOLDOWN_DAYS} days - skipping")
             continue
         articles = get_latest_news_rss(symbol)
         if not articles:
@@ -242,7 +246,6 @@ def scan_all_stocks():
         print(f"  📰 Found {len(articles)} article(s)")
         sentiment, impact, reasoning, quality_score, link = analyze_sentiment_and_score(symbol, articles)
         print(f"  📊 Analysis: Sentiment: {sentiment}, Impact: {impact}/10, Quality: {quality_score}/10")
-        # <<<<< News + MA/RSI filter >>>>>
         if (
             impact >= 8 and quality_score >= 7 and sentiment != "NEUTRAL"
             and moving_average_and_rsi_confirmation(symbol, sentiment)
@@ -260,7 +263,7 @@ def scan_all_stocks():
                 print(f"  🎯 PREMIUM OPPORTUNITY CONFIRMED! 📤 Sending Telegram alert...")
                 action = "🟢 BUY LONG" if sentiment == "BULLISH" else "🔴 SHORT"
                 send_telegram_alert(symbol, action, price, impact, reasoning, momentum, quality_score, link)
-                alerted_today[symbol] = datetime.now().date()
+                alerted_recently[symbol] = datetime.now()
                 opportunities_found += 1
                 time.sleep(2)
             else:
