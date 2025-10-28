@@ -4,3 +4,7 @@ plotly
 pandas
 numpy
 matplotlib
+feedparser
+vaderSentiment
+newspaper3k
+lxml
